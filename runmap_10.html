@@ -1,0 +1,3334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>runmap</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='88 76 150 150'%3E%3Crect x='88' y='76' width='150' height='150' fill='%230a0a0f'/%3E%3Ccircle cx='162' cy='148' r='70' fill='none' stroke='%238be8c8' stroke-width='1.5' opacity='0.3'/%3E%3Cpath d='M 92 220 C 60 210,55 170,62 145 C 69 118,88 98,112 88 C 136 78,165 78,188 90 C 212 102,228 124,230 148 C 232 172,220 194,202 208 C 184 222,158 228,136 220 C 114 212,100 196,98 178 C 96 160,108 144,124 138 C 140 132,160 136,172 148 C 184 160,182 178,170 186 C 158 194,142 190,135 180 C 128 170,132 156,142 152 C 150 148,162 152,164 160' fill='none' stroke='%238be8c8' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='164' cy='160' r='6' fill='%23c8f0e0'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Cormorant:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: rgba(255,255,255,0.06);
+    --text: #e8e8f0;
+    --muted: rgba(232,232,240,0.32);
+    --accent: #c8f0e0;
+    --accent2: #8be8c8;
+    --glow: rgba(139,232,200,0.15);
+    --run-color: #8be8c8;
+    --ride-color: #f0b86e;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* ── header ── */
+  header { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--border); z-index:1000; flex-shrink:0; gap:20px; }
+  .logo { font-family:'Cormorant',serif; font-weight:300; font-style:italic; font-size:1.4rem; color:var(--accent); white-space:nowrap; }
+  .logo span { color:var(--muted); font-style:normal; font-size:0.62rem; font-family:'DM Mono',monospace; margin-left:8px; letter-spacing:0.12em; }
+
+  /* ── tabs ── */
+  .tabs { display:flex; gap:2px; }
+  .tab-btn { padding:6px 16px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .tab-btn:hover { color:var(--text); border-color:rgba(255,255,255,0.15); }
+  .tab-btn.active { color:var(--accent); border-color:var(--accent2); background:var(--glow); }
+
+  .stats { display:flex; gap:20px; align-items:center; }
+  .stat { text-align:right; }
+  .stat-val { font-size:0.9rem; letter-spacing:0.05em; }
+  .stat-label { font-size:0.52rem; color:var(--muted); letter-spacing:0.14em; text-transform:uppercase; margin-top:1px; }
+  .run-col { color:var(--run-color); }
+  .ride-col { color:var(--ride-color); }
+
+  /* ── views ── */
+  #view-map { flex:1; position:relative; overflow:hidden; display:none; flex-direction:column; min-height:0; }
+  #view-summary { flex:1; overflow-y:auto; display:none; padding:32px; }
+  #view-share { flex:1; overflow-y:auto; display:none; padding:32px; }
+  #view-map.active { display:flex; }
+  #view-summary.active { display:block; }
+  #view-share.active { display:block; }
+  #map { width:100%; flex:1; min-height:0; }
+
+  /* ── share view ── */
+  .share-layout { display:grid; grid-template-columns:1fr 420px; gap:32px; max-width:1100px; }
+  .share-panel-title { font-size:0.54rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+
+  /* format buttons */
+  .format-btns { display:flex; gap:8px; margin-bottom:20px; }
+  .format-btn { padding:8px 16px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.58rem; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .format-btn:hover { color:var(--text); border-color:rgba(255,255,255,0.18); }
+  .format-btn.active { color:var(--accent); border-color:var(--accent2); background:var(--glow); }
+
+  /* photo drop zone */
+  .photo-drop { border:1px dashed rgba(255,255,255,0.1); padding:28px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; cursor:pointer; transition:all 0.2s; margin-bottom:20px; min-height:100px; }
+  .photo-drop:hover { border-color:rgba(200,240,224,0.25); background:rgba(200,240,224,0.02); }
+  .photo-drop.has-photo { border-style:solid; border-color:var(--border); padding:0; overflow:hidden; }
+  .photo-drop img { width:100%; height:180px; object-fit:cover; display:block; }
+  .photo-drop-label { font-size:0.6rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; }
+  .photo-drop-sub { font-size:0.52rem; color:rgba(232,232,240,0.2); letter-spacing:0.08em; }
+
+  /* options */
+  .share-options { display:flex; flex-direction:column; gap:12px; margin-bottom:24px; }
+  .share-opt-row { display:flex; align-items:center; justify-content:space-between; }
+  .share-opt-label { font-size:0.6rem; color:var(--text); }
+  .share-opt-sub { font-size:0.52rem; color:var(--muted); margin-top:2px; }
+
+  /* city selector */
+  .city-select { background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:'DM Mono',monospace; font-size:0.58rem; padding:6px 10px; cursor:pointer; appearance:none; width:140px; }
+  .city-select:focus { outline:none; border-color:var(--accent2); }
+
+  /* preview canvas area */
+  .preview-wrap { position:relative; background:var(--surface); border:1px solid var(--border); overflow:hidden; }
+  .preview-wrap canvas { display:block; width:100%; height:auto; }
+  .preview-label { font-size:0.5rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:8px; text-align:center; }
+
+  /* download buttons */
+  .dl-btns { display:flex; gap:8px; margin-top:16px; }
+  .dl-btn { flex:1; padding:10px; background:transparent; border:1px solid rgba(200,240,224,0.2); color:var(--accent); font-family:'DM Mono',monospace; font-size:0.58rem; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; transition:all 0.2s; }
+  .dl-btn:hover { background:var(--glow); border-color:var(--accent2); }
+  .dl-btn.transparent-btn { border-color:rgba(255,255,255,0.1); color:var(--muted); }
+  .dl-btn.transparent-btn:hover { color:var(--text); border-color:rgba(255,255,255,0.2); }
+
+  /* ── fit draw mode ── */
+  #fit-draw-overlay { position:absolute; inset:0; z-index:700; display:none; cursor:crosshair; pointer-events:none; }
+  #fit-draw-overlay.active { display:block; pointer-events:all; }
+  #fit-draw-banner { position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:710; background:rgba(10,10,15,0.92); border:1px solid var(--accent2); color:var(--accent); font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; padding:8px 18px; pointer-events:none; white-space:nowrap; display:none; }
+  #fit-draw-banner.active { display:block; }
+  #fit-draw-line { position:absolute; pointer-events:none; z-index:708; display:none; }
+
+  /* set-fit button in tree */
+  .tree-fit-btn { font-size:0.48rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); background:transparent; border:1px solid var(--border); padding:2px 6px; cursor:pointer; font-family:'DM Mono',monospace; transition:all 0.15s; white-space:nowrap; }
+  .tree-fit-btn:hover { color:var(--accent); border-color:var(--accent2); }
+  .tree-fit-btn.has-fit { color:var(--accent2); border-color:rgba(139,232,200,0.3); }
+  .tree-go-map-btn { font-size:0.48rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); background:transparent; border:none; padding:2px 4px; cursor:pointer; font-family:'DM Mono',monospace; transition:color 0.15s; }
+  .tree-go-map-btn:hover { color:var(--accent); }
+
+  /* summary position picker */
+  .pos-picker { display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr 1fr; gap:3px; width:72px; height:72px; }
+  .pos-btn { background:var(--surface); border:1px solid var(--border); cursor:pointer; transition:all 0.15s; }
+  .pos-btn:hover { background:rgba(139,232,200,0.08); border-color:rgba(139,232,200,0.3); }
+  .pos-btn.active { background:var(--glow); border-color:var(--accent2); }
+  .pos-btn.center { grid-column:2; grid-row:2; }
+
+  /* ── auth ── */
+  #auth-screen { position:absolute; inset:0; z-index:900; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg); }
+  .auth-ring { width:140px; height:140px; border:1px solid rgba(200,240,224,0.15); border-radius:50%; display:flex; align-items:center; justify-content:center; position:relative; animation:pulse 3s ease-in-out infinite; }
+  .auth-ring::before { content:''; position:absolute; inset:12px; border:1px solid rgba(200,240,224,0.06); border-radius:50%; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 var(--glow);}50%{box-shadow:0 0 40px 10px var(--glow);} }
+  .auth-icon { font-size:1.8rem; opacity:0.6; }
+  .auth-title { font-family:'Cormorant',serif; font-style:italic; font-weight:300; font-size:1.4rem; margin-top:28px; }
+  .auth-sub { font-size:0.6rem; color:var(--muted); letter-spacing:0.14em; text-transform:uppercase; margin-top:8px; margin-bottom:28px; }
+  .strava-btn { display:flex; align-items:center; gap:10px; padding:12px 24px; background:transparent; border:1px solid rgba(252,76,2,0.4); color:#fc4c02; font-family:'DM Mono',monospace; font-size:0.68rem; letter-spacing:0.14em; text-transform:uppercase; cursor:pointer; transition:all 0.25s; text-decoration:none; }
+  .strava-btn:hover { background:rgba(252,76,2,0.08); border-color:rgba(252,76,2,0.8); }
+
+  /* ── loading ── */
+  #loading-screen { position:fixed; inset:0; z-index:1900; display:none; flex-direction:column; align-items:center; justify-content:center; background:var(--bg); gap:14px; }
+  #loading-screen.visible { display:flex; }
+  .loading-title { font-family:'Cormorant',serif; font-style:italic; font-size:1.2rem; color:var(--accent); }
+  .loading-sub { font-size:0.58rem; color:var(--muted); letter-spacing:0.14em; text-transform:uppercase; }
+  .progress-wrap { width:200px; height:1px; background:var(--border); margin-top:6px; }
+  .progress-bar { height:100%; width:0%; background:var(--accent2); transition:width 0.3s; }
+
+  /* ── map sidebar ── */
+  #sidebar { position:absolute; right:0; top:0; bottom:0; width:265px; background:rgba(10,10,15,0.93); backdrop-filter:blur(12px); border-left:1px solid var(--border); z-index:800; display:flex; flex-direction:column; transform:translateX(100%); transition:transform 0.4s cubic-bezier(0.16,1,0.3,1); overflow:hidden; }
+  #sidebar.visible { transform:translateX(0); }
+  .sb-section { padding:11px 15px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .sb-title { font-size:0.52rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--muted); margin-bottom:9px; }
+
+  /* tree */
+  #activity-tree { flex:1; overflow-y:auto; min-height:0; padding-bottom:8px; }
+  #activity-tree::-webkit-scrollbar { width:2px; }
+  #activity-tree::-webkit-scrollbar-thumb { background:var(--border); }
+  .tree-city { border-bottom:1px solid var(--border); }
+  .tree-city-header { display:flex; align-items:center; padding:9px 15px; cursor:pointer; transition:background 0.15s; gap:7px; }
+  .tree-city-header:hover { background:rgba(255,255,255,0.02); }
+  .tree-city-name { font-size:0.65rem; color:var(--text); flex:1; }
+  .tree-city-count { font-size:0.5rem; color:var(--muted); }
+  .tree-chevron { font-size:0.48rem; color:var(--muted); transition:transform 0.2s; width:9px; }
+  .tree-city.open .tree-chevron { transform:rotate(90deg); }
+  .tree-city-cb { width:11px; height:11px; border:1px solid var(--border); background:transparent; cursor:pointer; appearance:none; flex-shrink:0; position:relative; transition:all 0.15s; }
+  .tree-city-cb:checked { background:rgba(139,232,200,0.18); border-color:var(--accent2); }
+  .tree-city-cb:checked::after { content:''; position:absolute; inset:2px; background:var(--accent2); }
+  .tree-city-cb:indeterminate { background:rgba(139,232,200,0.08); border-color:rgba(139,232,200,0.35); }
+  .tree-city-cb:indeterminate::after { content:''; position:absolute; left:2px; right:2px; top:50%; height:1px; background:var(--accent2); transform:translateY(-50%); }
+  .tree-types { display:none; padding:0 0 5px; }
+  .tree-city.open .tree-types { display:block; }
+  .tree-type-row { display:flex; align-items:center; padding:5px 15px 5px 30px; gap:7px; cursor:pointer; transition:background 0.15s; }
+  .tree-type-row:hover { background:rgba(255,255,255,0.02); }
+  .tree-type-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+  .tree-type-label { font-size:0.6rem; flex:1; }
+  .tree-type-label.run { color:var(--run-color); }
+  .tree-type-label.ride { color:var(--ride-color); }
+  .tree-type-count { font-size:0.48rem; color:var(--muted); }
+  .tree-type-cb { width:11px; height:11px; border:1px solid var(--border); background:transparent; cursor:pointer; appearance:none; flex-shrink:0; position:relative; transition:all 0.15s; }
+  .tree-type-cb.run:checked { background:rgba(139,232,200,0.18); border-color:var(--run-color); }
+  .tree-type-cb.run:checked::after { content:''; position:absolute; inset:2px; background:var(--run-color); }
+  .tree-type-cb.ride:checked { background:rgba(240,184,110,0.18); border-color:var(--ride-color); }
+  .tree-type-cb.ride:checked::after { content:''; position:absolute; inset:2px; background:var(--ride-color); }
+
+  /* zoom / toggles / color */
+  .zoom-controls { display:flex; gap:5px; }
+  .zoom-btn { width:25px; height:25px; background:transparent; border:1px solid var(--border); color:var(--muted); font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; font-family:'DM Mono',monospace; }
+  .zoom-btn:hover { color:var(--accent); border-color:rgba(200,240,224,0.3); }
+  .zoom-fit-btn { flex:1; padding:4px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.52rem; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .zoom-fit-btn:hover { color:var(--accent); }
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+  .toggle-row:last-child { margin-bottom:0; }
+  .toggle-label { font-size:0.58rem; color:var(--text); }
+  .toggle { position:relative; width:28px; height:14px; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-slider { position:absolute; inset:0; background:rgba(255,255,255,0.05); border:1px solid var(--border); cursor:pointer; transition:0.2s; }
+  .toggle-slider::before { content:''; position:absolute; width:8px; height:8px; left:2px; top:50%; transform:translateY(-50%); background:var(--muted); transition:0.2s; }
+  .toggle input:checked + .toggle-slider { background:rgba(139,232,200,0.1); border-color:var(--accent2); }
+  .toggle input:checked + .toggle-slider::before { transform:translate(14px,-50%); background:var(--accent2); }
+  .color-modes { display:flex; gap:4px; flex-wrap:wrap; }
+  .color-mode-btn { padding:4px 7px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.5rem; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .color-mode-btn:hover { color:var(--text); }
+  .color-mode-btn.active { color:var(--accent); border-color:var(--accent2); }
+  .color-pick-row { display:flex; align-items:center; gap:8px; margin-top:7px; }
+  .color-pick-label { font-size:0.52rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; }
+  #custom-color { width:24px; height:15px; border:1px solid var(--border); background:transparent; cursor:pointer; padding:0; }
+  .disconnect-btn { margin:9px 15px 11px; padding:8px; flex-shrink:0; background:transparent; border:1px solid rgba(255,255,255,0.05); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.54rem; letter-spacing:0.14em; text-transform:uppercase; cursor:pointer; transition:all 0.2s; }
+  .disconnect-btn:hover { color:#ff6b6b; border-color:rgba(255,107,107,0.3); }
+  #toggle-btn { position:absolute; right:0; top:50%; transform:translateY(-50%); z-index:850; background:rgba(10,10,15,0.9); border:1px solid var(--border); border-right:none; color:var(--muted); font-size:0.58rem; padding:11px 5px; cursor:pointer; writing-mode:vertical-rl; letter-spacing:0.12em; text-transform:uppercase; font-family:'DM Mono',monospace; transition:color 0.2s, right 0.4s cubic-bezier(0.16,1,0.3,1); }
+  #toggle-btn:hover { color:var(--accent); }
+  #toggle-btn.open { right:265px; }
+  .leaflet-control-zoom { display:none !important; }
+  .leaflet-control-attribution { display:none !important; }
+
+  /* ── summary view ── */
+  #view-summary { background:var(--bg); }
+  .summary-header { margin-bottom:36px; }
+  .summary-header h1 { font-family:'Cormorant',serif; font-weight:300; font-style:italic; font-size:2rem; color:var(--accent); margin-bottom:4px; }
+  .summary-header p { font-size:0.6rem; color:var(--muted); letter-spacing:0.12em; text-transform:uppercase; }
+
+  .summary-totals { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:40px; }
+  .total-card { border:1px solid var(--border); padding:18px 20px; background:var(--surface); }
+  .total-card-val { font-size:1.6rem; font-weight:300; letter-spacing:0.04em; margin-bottom:4px; }
+  .total-card-label { font-size:0.55rem; color:var(--muted); letter-spacing:0.14em; text-transform:uppercase; }
+  .total-card-val.run-col { color:var(--run-color); }
+  .total-card-val.ride-col { color:var(--ride-color); }
+
+  .summary-section-title { font-size:0.54rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+
+  .city-cards { display:flex; flex-direction:column; gap:10px; margin-bottom:40px; }
+  .city-card { border:1px solid var(--border); background:var(--surface); overflow:hidden; }
+  .city-card-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
+  .city-card-header:hover { background:rgba(255,255,255,0.02); }
+  .city-card-name { font-family:'Cormorant',serif; font-style:italic; font-size:1.1rem; color:var(--text); }
+  .city-card-total { font-size:0.56rem; color:var(--muted); letter-spacing:0.1em; }
+  .city-card-body { padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .city-type-block { }
+  .city-type-label { font-size:0.52rem; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+  .city-type-dot { width:5px; height:5px; border-radius:50%; display:inline-block; }
+  .city-stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .city-stat { }
+  .city-stat-val { font-size:0.85rem; letter-spacing:0.03em; }
+  .city-stat-label { font-size:0.48rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:1px; }
+  .city-bar-wrap { height:2px; background:var(--border); margin-top:10px; }
+  .city-bar { height:100%; transition:width 0.6s cubic-bezier(0.16,1,0.3,1); }
+
+  .go-map-btn { padding:7px 14px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.52rem; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .go-map-btn:hover { color:var(--accent); border-color:var(--accent2); }
+
+  /* year table */
+  .year-table { width:100%; border-collapse:collapse; margin-bottom:40px; }
+  .year-table th { font-size:0.52rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); text-align:left; padding:8px 16px 10px; border-bottom:1px solid var(--border); font-weight:400; }
+  .year-table th.num { text-align:right; }
+  .year-table td { padding:10px 16px; border-bottom:1px solid var(--border); font-size:0.72rem; vertical-align:middle; }
+  .year-table td.num { text-align:right; }
+  .year-table tr:hover td { background:rgba(255,255,255,0.02); }
+  .year-table tr.total-row td { border-top:1px solid rgba(255,255,255,0.1); border-bottom:none; color:var(--accent); font-size:0.7rem; }
+  .year-label { font-family:'Cormorant',serif; font-style:italic; font-size:1rem; color:var(--text); }
+  .bar-cell { width:180px; }
+  .inline-bar-wrap { height:2px; background:var(--border); margin-top:4px; }
+  .inline-bar { height:100%; }
+
+  /* ── landing page ── */
+  #landing { position:fixed; inset:0; z-index:2000; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
+  #landing.hidden { display:none; }
+  .landing-logo { font-family:'Cormorant',serif; font-weight:300; font-style:italic; font-size:4rem; color:var(--accent); letter-spacing:-0.01em; margin-bottom:8px; animation:fadeup 0.8s ease both; }
+  .landing-sub { font-size:0.62rem; color:var(--muted); letter-spacing:0.22em; text-transform:uppercase; margin-bottom:56px; animation:fadeup 0.8s 0.1s ease both; }
+  .landing-desc { font-size:0.72rem; color:rgba(232,232,240,0.45); max-width:340px; text-align:center; line-height:1.8; margin-bottom:48px; letter-spacing:0.04em; animation:fadeup 0.8s 0.2s ease both; }
+  .landing-connect { display:flex; align-items:center; gap:10px; padding:14px 32px; background:transparent; border:1px solid rgba(252,76,2,0.5); color:#fc4c02; font-family:'DM Mono',monospace; font-size:0.7rem; letter-spacing:0.16em; text-transform:uppercase; cursor:pointer; transition:all 0.25s; text-decoration:none; animation:fadeup 0.8s 0.3s ease both; }
+  .landing-connect:hover { background:rgba(252,76,2,0.08); border-color:#fc4c02; box-shadow:0 0 30px rgba(252,76,2,0.12); }
+  .landing-ring { display:flex; align-items:center; justify-content:center; margin-bottom:40px; animation:fadeup 0.8s ease both; }
+  .landing-ring-icon { font-size:2.4rem; opacity:0.5; }
+  @keyframes fadeup { from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);} }
+
+  /* ── last activities tab ── */
+  #view-last { flex:1; overflow-y:auto; display:none; padding:32px; }
+  #view-last.active { display:block; }
+  .act-cards { display:flex; flex-direction:column; gap:10px; max-width:700px; }
+  .act-card { border:1px solid var(--border); background:var(--surface); cursor:pointer; transition:all 0.2s; overflow:hidden; display:grid; grid-template-columns:1fr auto; }
+  .act-card:hover { border-color:rgba(200,240,224,0.2); background:rgba(255,255,255,0.02); }
+  .act-card-body { padding:16px 20px; }
+  .act-card-name { font-family:'Cormorant',serif; font-style:italic; font-size:1.05rem; margin-bottom:6px; }
+  .act-card-meta { font-size:0.56rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:10px; }
+  .act-card-stats { display:flex; gap:20px; }
+  .act-stat { }
+  .act-stat-val { font-size:0.9rem; letter-spacing:0.04em; }
+  .act-stat-label { font-size:0.48rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:1px; }
+  .act-card-map { width:120px; background:#0a0a0f; flex-shrink:0; }
+  .act-card-map canvas { width:120px; height:100%; display:block; }
+  .act-share-hint { font-size:0.5rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:10px; }
+
+  /* ── activity share modal ── */
+  #act-modal { position:fixed; inset:0; z-index:1500; background:rgba(10,10,15,0.92); display:none; flex-direction:column; align-items:center; justify-content:center; padding:24px; }
+  #act-modal.open { display:flex; }
+  .act-modal-inner { background:var(--bg); border:1px solid var(--border); width:100%; max-width:880px; max-height:90vh; overflow-y:auto; display:grid; grid-template-columns:1fr 360px; }
+  .act-modal-left { padding:28px; border-right:1px solid var(--border); }
+  .act-modal-title { font-family:'Cormorant',serif; font-style:italic; font-size:1.6rem; color:var(--text); margin-bottom:4px; }
+  .act-modal-meta { font-size:0.56rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:24px; }
+  .act-modal-metrics { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:24px; }
+  .act-metric { border:1px solid var(--border); padding:12px 14px; }
+  .act-metric-val { font-size:1.1rem; letter-spacing:0.04em; }
+  .act-metric-label { font-size:0.48rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:3px; }
+  .act-modal-right { padding:24px; display:flex; flex-direction:column; gap:14px; }
+  .act-modal-close { position:absolute; top:20px; right:20px; background:transparent; border:none; color:var(--muted); font-size:1.2rem; cursor:pointer; padding:4px 8px; }
+  .act-modal-close:hover { color:var(--text); }
+
+  /* ── run club view ── */
+  #view-runclub { flex:1; overflow-y:auto; display:none; padding:32px; }
+  #view-runclub.active { display:block; }
+  .rc-layout { display:grid; grid-template-columns:1fr 400px; gap:32px; max-width:1100px; }
+  .rc-logo-wrap { display:flex; align-items:center; justify-content:center; margin-bottom:24px; }
+  .rc-logo-wrap img { width:120px; height:120px; border-radius:50%; object-fit:cover; opacity:0.9; }
+  .rc-field { margin-bottom:14px; }
+  .rc-label { font-size:0.54rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; display:block; }
+  .rc-input { width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); font-family:'DM Mono',monospace; font-size:0.72rem; padding:8px 12px; outline:none; transition:border 0.15s; }
+  .rc-input:focus { border-color:var(--accent2); }
+  .rc-types { display:flex; gap:6px; flex-wrap:wrap; }
+  .rc-type-btn { padding:6px 12px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.58rem; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .rc-type-btn:hover { color:var(--text); border-color:rgba(255,255,255,0.2); }
+  .rc-type-btn.active { color:var(--accent); border-color:var(--accent2); background:var(--glow); }
+  .rc-section-title { font-size:0.54rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+
+  #view-video { flex:1; overflow-y:auto; display:none; padding:32px; }
+  #view-video.active { display:block; }
+  .video-layout { display:grid; grid-template-columns:320px 1fr; gap:32px; max-width:1000px; }
+  .video-canvas-wrap { position:relative; background:#0a0a0f; border:1px solid var(--border); aspect-ratio:1; overflow:hidden; }
+  .video-canvas-wrap canvas { display:block; width:100%; height:100%; }
+  .video-progress-bar { height:2px; background:var(--accent2); position:absolute; bottom:0; left:0; width:0%; transition:none; }
+  .video-counter { position:absolute; top:10px; right:14px; font-size:0.56rem; color:rgba(255,255,255,0.4); letter-spacing:0.1em; font-family:'DM Mono',monospace; }
+  .vid-btn { padding:10px 20px; background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'DM Mono',monospace; font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer; transition:all 0.2s; }
+  .vid-btn:hover { color:var(--text); border-color:rgba(255,255,255,0.2); }
+  .vid-btn.primary { border-color:rgba(200,240,224,0.3); color:var(--accent); }
+  .vid-btn.primary:hover { background:var(--glow); border-color:var(--accent2); }
+  .vid-btn:disabled { opacity:0.35; cursor:not-allowed; }
+  .vid-status { font-size:0.58rem; color:var(--muted); letter-spacing:0.08em; margin-top:8px; min-height:1.4em; }
+
+  #view-settings{flex:1;overflow-y:auto;display:none;padding:32px;}
+  #view-settings.active{display:block;}
+  .settings-layout{display:grid;grid-template-columns:1fr 1fr;gap:40px;max-width:960px;}
+  .settings-section{margin-bottom:32px;}
+  .settings-section-title{font-size:0.54rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  .color-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .color-row-label{font-size:0.62rem;color:var(--text);}
+  .color-swatch{width:28px;height:20px;border:1px solid var(--border);cursor:pointer;padding:0;}
+  .color-hex{font-size:0.58rem;color:var(--text);font-family:'DM Mono',monospace;width:60px;background:transparent;border:none;outline:none;cursor:pointer;}
+  .font-opt{padding:12px 16px;border:1px solid var(--border);cursor:pointer;transition:all 0.15s;margin-bottom:8px;}
+  .font-opt:hover{border-color:rgba(255,255,255,0.2);}
+  .font-opt.active{border-color:var(--accent2);background:var(--glow);}
+  .font-opt-name{font-size:0.56rem;color:var(--muted);margin-bottom:4px;}
+  .font-opt-preview{font-size:1.1rem;color:var(--accent);}
+  .city-fit-item{border:1px solid var(--border);background:var(--surface);margin-bottom:8px;}
+  .city-fit-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;}
+  .city-fit-header:hover{background:rgba(255,255,255,0.02);}
+  .city-fit-name{font-family:'Cormorant',serif;font-style:italic;font-size:1rem;}
+  .city-fit-status{font-size:0.52rem;color:var(--muted);letter-spacing:0.08em;}
+  .city-fit-status.set{color:var(--accent2);}
+  .city-fit-editor{display:none;}
+  .city-fit-editor.open{display:block;}
+  .city-fit-map-wrap{position:relative;height:300px;border-top:1px solid var(--border);}
+  .fit-rect-overlay{position:absolute;border:2px solid var(--accent2);pointer-events:none;z-index:500;box-shadow:0 0 0 9999px rgba(10,10,15,0.45);}
+  .fit-handle{position:absolute;width:14px;height:14px;background:var(--accent2);border:2px solid #0a0a0f;cursor:pointer;pointer-events:all;z-index:501;}
+  .fit-handle.tl{top:0;left:0;transform:translate(-50%,-50%);}
+  .fit-handle.tr{top:0;right:0;transform:translate(50%,-50%);}
+  .fit-handle.bl{bottom:0;left:0;transform:translate(-50%,50%);}
+  .fit-handle.br{bottom:0;right:0;transform:translate(50%,50%);}
+  .city-fit-actions{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);}
+  .settings-note{font-size:0.56rem;color:var(--muted);line-height:1.7;margin-top:6px;}
+  .vid-default-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;}
+  .vid-default-label{font-size:0.62rem;color:var(--text);}
+
+  .cog-btn { position:fixed; bottom:28px; right:28px; z-index:1500; width:42px; height:42px; background:var(--surface); border:1px solid var(--border); color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
+  .cog-btn:hover { color:var(--accent); border-color:var(--accent2); background:rgba(200,240,224,0.06); }
+  .cog-btn.active { color:var(--accent); border-color:var(--accent2); }
+  .cog-btn svg { width:18px; height:18px; }
+
+  @keyframes runnerBounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+  #loading-runner { animation: runnerBounce 0.5s ease-in-out infinite; display:inline-block; }
+
+  #view-marathons { flex:1; overflow-y:auto; display:none; padding:32px; }
+  #view-marathons.active { display:block; }
+  .marathon-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; max-width:1000px; }
+  .marathon-card { border:1px solid var(--border); background:var(--surface); padding:20px; position:relative; overflow:hidden; }
+  .marathon-card:hover { border-color:rgba(200,240,224,0.2); }
+  .marathon-num { position:absolute; top:16px; right:20px; font-size:2.5rem; font-family:'Cormorant',serif; font-style:italic; color:rgba(200,240,224,0.08); line-height:1; }
+  .marathon-name { font-family:'Cormorant',serif; font-style:italic; font-size:1.1rem; margin-bottom:4px; }
+  .marathon-date { font-size:0.54rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:14px; }
+  .marathon-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .marathon-stat-val { font-size:1.1rem; font-family:'DM Mono',monospace; color:var(--accent); }
+  .marathon-stat-label { font-size:0.5rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; }
+  .marathon-canvas-wrap { margin-top:14px; border-top:1px solid var(--border); padding-top:12px; }
+  .marathon-canvas-wrap canvas { width:100%; display:block; background:transparent; }
+  .marathon-empty { font-size:0.62rem; color:var(--muted); letter-spacing:0.1em; }
+</style>
+</head>
+<body>
+
+<!-- LANDING PAGE -->
+<div id="landing">
+  <div class="landing-ring">
+    <svg width="120" height="120" viewBox="88 76 150 150" style="opacity:0.95">
+      <circle cx="162" cy="148" r="70" fill="none" stroke="#8be8c8" stroke-width="0.8" opacity="0.25"/>
+      <circle cx="162" cy="148" r="52" fill="none" stroke="#8be8c8" stroke-width="0.5" opacity="0.12"/>
+      <path d="M 92 220 C 60 210, 55 170, 62 145 C 69 118, 88 98, 112 88 C 136 78, 165 78, 188 90 C 212 102, 228 124, 230 148 C 232 172, 220 194, 202 208 C 184 222, 158 228, 136 220 C 114 212, 100 196, 98 178 C 96 160, 108 144, 124 138 C 140 132, 160 136, 172 148 C 184 160, 182 178, 170 186 C 158 194, 142 190, 135 180 C 128 170, 132 156, 142 152 C 150 148, 162 152, 164 160"
+        fill="none" stroke="#8be8c8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.08"/>
+      <path d="M 92 220 C 60 210, 55 170, 62 145 C 69 118, 88 98, 112 88 C 136 78, 165 78, 188 90 C 212 102, 228 124, 230 148 C 232 172, 220 194, 202 208 C 184 222, 158 228, 136 220 C 114 212, 100 196, 98 178 C 96 160, 108 144, 124 138 C 140 132, 160 136, 172 148 C 184 160, 182 178, 170 186 C 158 194, 142 190, 135 180 C 128 170, 132 156, 142 152 C 150 148, 162 152, 164 160"
+        fill="none" stroke="#8be8c8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      <circle cx="92" cy="220" r="3.5" fill="#8be8c8" opacity="0.4"/>
+      <circle cx="164" cy="160" r="8" fill="none" stroke="#8be8c8" stroke-width="0.8" opacity="0.25"/>
+      <circle cx="164" cy="160" r="3.5" fill="#c8f0e0"/>
+    </svg>
+  </div>
+  <div class="landing-logo">runmap</div>
+  <div class="landing-sub">your strava routes, visualized</div>
+  <div class="landing-desc">see every run and ride on a map. explore by city, track your years, and share your routes.</div>
+  <a id="landing-connect-btn" class="landing-connect" href="#"><span>⚡</span> connect with strava</a>
+</div>
+
+<!-- LOADING (full screen) -->
+<div id="loading-screen">
+  <div id="loading-runner" style="font-size:2.8rem;margin-bottom:8px;">🏃</div>
+  <div class="loading-title" id="loading-title" style="font-family:'Cormorant',serif;font-style:italic;font-size:1.4rem;font-weight:300;color:var(--accent);">runmap</div>
+  <div class="loading-sub" id="loading-sub">connecting...</div>
+  <div id="loading-first-time" style="display:none;font-size:0.54rem;color:var(--muted);letter-spacing:0.08em;text-align:center;max-width:300px;line-height:2;margin-top:12px;">
+    🐢 first time loading — fetching all your activities.<br>
+    this only happens once. next time: instant ⚡
+  </div>
+  <div class="progress-wrap" style="margin-top:16px;"><div class="progress-bar" id="progress-bar"></div></div>
+</div>
+
+<!-- ACTIVITY SHARE MODAL -->
+<div id="act-modal">
+  <button class="act-modal-close" id="act-modal-close">✕</button>
+  <div class="act-modal-inner">
+    <div class="act-modal-left">
+      <input id="modal-title-input" type="text" placeholder="Activity title" style="font-family:'Cormorant',serif;font-style:italic;font-size:1.5rem;font-weight:300;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);width:100%;margin-bottom:6px;padding-bottom:4px;outline:none;">
+      <div class="act-modal-meta" id="modal-meta">—</div>
+      <div class="act-modal-metrics" id="modal-metrics"></div>
+      <canvas id="modal-map-canvas" style="width:100%;border:1px solid var(--border);display:block;background:#0a0a0f;"></canvas>
+    </div>
+    <div class="act-modal-right">
+      <div style="display:flex;gap:6px;margin-bottom:16px;">
+        <button class="format-btn active" id="modal-mode-image" data-mode="image">image</button>
+        <button class="format-btn" id="modal-mode-video" data-mode="video">video</button>
+      </div>
+      <div id="modal-image-panel">
+      <div class="share-panel-title">format</div>
+      <div class="format-btns" id="modal-fmt-btns">
+        <button class="format-btn active" data-fmt="square">square</button>
+        <button class="format-btn" data-fmt="portrait">portrait</button>
+        <button class="format-btn" data-fmt="story">story</button>
+      </div>
+
+      <div class="share-panel-title" style="margin-top:14px;">background photo</div>
+      <div id="modal-photo-drop" style="border:1px dashed rgba(255,255,255,0.1);padding:14px;text-align:center;cursor:pointer;font-size:0.58rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px;transition:all 0.2s;">drop photo or click</div>
+      <input type="file" id="modal-photo-input" accept="image/*" style="display:none">
+
+      <div class="share-panel-title">route</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span style="font-size:0.56rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;">scale</span>
+          <input type="range" id="modal-route-scale" min="20" max="100" value="84" style="flex:1">
+          <span id="modal-scale-val" style="font-size:0.56rem;color:var(--muted);width:28px;text-align:right;">84%</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span style="font-size:0.56rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;">opacity</span>
+          <input type="range" id="modal-route-opacity" min="10" max="100" value="85" style="flex:1">
+          <span id="modal-opacity-val" style="font-size:0.56rem;color:var(--muted);width:28px;text-align:right;">85%</span>
+        </div>
+      </div>
+
+      <div class="share-panel-title">preview</div>
+      <div class="preview-wrap"><canvas id="modal-share-canvas"></canvas></div>
+      <div class="dl-btns" style="margin-top:12px;">
+        <button class="dl-btn" id="modal-dl">↓ download</button>
+        <button class="dl-btn transparent-btn" id="modal-dl-transparent">↓ transparent</button>
+      </div>
+      </div><!-- end modal-image-panel -->
+
+      <div id="modal-video-panel" style="display:none;">
+        <div class="share-panel-title">duration</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <input type="range" id="modal-vid-duration" min="5" max="20" value="12" style="flex:1;">
+          <span id="modal-vid-duration-val" style="font-size:0.56rem;color:var(--muted);width:28px;">12s</span>
+        </div>
+        <div class="share-panel-title">preview</div>
+        <div style="position:relative;background:#0a0a0f;border:1px solid var(--border);">
+          <canvas id="modal-vid-canvas" style="width:100%;display:block;"></canvas>
+          <div id="modal-vid-progress" style="position:absolute;bottom:0;left:0;height:2px;width:0%;background:var(--accent2);transition:none;"></div>
+        </div>
+        <div class="dl-btns" style="margin-top:12px;">
+          <button class="dl-btn" id="modal-vid-preview">▶ preview</button>
+          <button class="dl-btn" id="modal-vid-export">↓ download</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="logo">
+    <svg width="18" height="18" viewBox="88 76 150 150" style="vertical-align:middle;margin-right:6px;margin-bottom:1px;">
+      <circle cx="162" cy="148" r="70" fill="none" stroke="#8be8c8" stroke-width="1.5" opacity="0.25"/>
+      <path d="M 92 220 C 60 210, 55 170, 62 145 C 69 118, 88 98, 112 88 C 136 78, 165 78, 188 90 C 212 102, 228 124, 230 148 C 232 172, 220 194, 202 208 C 184 222, 158 228, 136 220 C 114 212, 100 196, 98 178 C 96 160, 108 144, 124 138 C 140 132, 160 136, 172 148 C 184 160, 182 178, 170 186 C 158 194, 142 190, 135 180 C 128 170, 132 156, 142 152 C 150 148, 162 152, 164 160"
+        fill="none" stroke="#8be8c8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      <circle cx="164" cy="160" r="7" fill="#c8f0e0"/>
+    </svg>runmap <span>/ strava</span>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="summary">summary</button>
+    <button class="tab-btn" data-tab="last">last activities</button>
+    <button class="tab-btn" data-tab="map">map</button>
+    <button class="tab-btn" data-tab="share">share</button>
+    <button class="tab-btn" data-tab="runclub">run club</button>
+    <button class="tab-btn" data-tab="video">video</button>
+    <button class="tab-btn" data-tab="marathons">marathons</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-val run-col" id="stat-runs">—</div><div class="stat-label">runs</div></div>
+    <div class="stat"><div class="stat-val ride-col" id="stat-rides">—</div><div class="stat-label">rides</div></div>
+    <div class="stat"><div class="stat-val" id="stat-km">—</div><div class="stat-label">km</div></div>
+    <button id="sync-btn" style="background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;padding:5px 10px;cursor:pointer;transition:all 0.15s;" title="Sync from Strava">↻ sync</button>
+  </div>
+</header>
+
+<!-- MAP VIEW -->
+<div id="view-map" class="view-pane">
+  <div id="map"></div>
+  <div id="fit-draw-overlay"></div>
+  <div id="fit-draw-banner">drag to set fit bounds — release to confirm</div>
+  <svg id="fit-draw-line" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:709;display:none;"><line id="fit-line-el" x1="0" y1="0" x2="0" y2="0" stroke="#8be8c8" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.8"/><circle id="fit-dot-a" r="4" fill="#8be8c8"/><circle id="fit-dot-b" r="4" fill="#8be8c8"/></svg>
+
+  <div id="auth-screen" style="display:none"></div>
+
+  <div id="sidebar">
+    <div class="sb-section">
+      <div class="sb-title">zoom</div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-out">−</button>
+        <button class="zoom-fit-btn" id="zoom-fit">fit view</button>
+      </div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-title">display</div>
+      <div class="toggle-row"><span class="toggle-label">basemap</span><label class="toggle"><input type="checkbox" id="toggle-basemap" checked><span class="toggle-slider"></span></label></div>
+      <div class="toggle-row"><span class="toggle-label">density mode</span><label class="toggle"><input type="checkbox" id="toggle-density"><span class="toggle-slider"></span></label></div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-title">line color</div>
+      <div class="color-modes">
+        <button class="color-mode-btn active" data-mode="type">by type</button>
+        <button class="color-mode-btn" data-mode="multi">multi</button>
+        <button class="color-mode-btn" data-mode="single">single</button>
+        <button class="color-mode-btn" data-mode="white">white</button>
+      </div>
+      <div class="color-pick-row" id="custom-color-row" style="display:none">
+        <span class="color-pick-label">color</span>
+        <input type="color" id="custom-color" value="#8be8c8">
+      </div>
+    </div>
+    <div class="sb-section" style="padding-bottom:6px;flex-shrink:0;"><div class="sb-title">activities</div></div>
+    <div id="activity-tree"></div>
+    <button class="disconnect-btn" id="disconnect-btn">disconnect strava</button>
+  </div>
+
+  <button id="toggle-btn">map</button>
+</div>
+
+<!-- LAST ACTIVITIES VIEW -->
+<div id="view-last" class="view-pane">
+  <div class="summary-header" style="margin-bottom:24px;">
+    <h1>last activities</h1>
+    <p style="font-size:0.6rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;">click any activity to share</p>
+  </div>
+  <div class="act-cards" id="act-cards"></div>
+</div>
+
+<!-- SUMMARY VIEW -->
+<div id="view-summary" class="view-pane active">
+  <div class="summary-header">
+    <h1>your activities</h1>
+    <p id="summary-sub">— runs · rides</p>
+  </div>
+  <div class="summary-totals" id="summary-totals"></div>
+  <div class="summary-section-title">by year</div>
+  <table class="year-table" id="year-table">
+    <thead>
+      <tr>
+        <th>year</th>
+        <th class="num" style="color:var(--run-color)">runs</th>
+        <th class="num" style="color:var(--run-color)">run km</th>
+        <th class="num" style="color:var(--ride-color)">rides</th>
+        <th class="num" style="color:var(--ride-color)">ride km</th>
+        <th class="num">total km</th>
+        <th class="bar-cell"></th>
+      </tr>
+    </thead>
+    <tbody id="year-tbody"></tbody>
+  </table>
+
+  <div class="summary-section-title" style="margin-top:32px;">most frequented areas</div>
+  <div id="hotspots-list" style="display:flex;flex-direction:column;gap:8px;max-width:700px;margin-bottom:40px;"></div>
+</div>
+
+
+<!-- RUN CLUB VIEW -->
+<div id="view-runclub" class="view-pane">
+  <div style="margin-bottom:24px;">
+    <div style="font-family:'Cormorant',serif;font-weight:300;font-style:italic;font-size:2rem;color:var(--accent);margin-bottom:4px;">run club</div>
+    <div style="font-size:0.6rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;">create & share a club activity</div>
+  </div>
+  <div class="rc-layout">
+    <!-- left: form -->
+    <div>
+      <div style="display:flex;gap:6px;margin-bottom:16px;justify-content:center;">
+        <button class="color-mode-btn active" id="rc-club-cprc" onclick="setRcClub('cprc')">CPRC</button>
+        <button class="color-mode-btn" id="rc-club-cptc" onclick="setRcClub('cptc')">CPTC</button>
+      </div>
+      <div class="rc-logo-wrap">
+        <img id="rc-logo-img" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/7QCEUGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAGgcAigAYkZCTUQwYTAwMGFkOTAxMDAwMDZkMDMwMDAwNzgwNTAwMDA4YzA1MDAwMGRkMDUwMDAwZmEwOTAwMDA4ZjBlMDAwMGU4MGUwMDAwMGUwZjAwMDA1YzBmMDAwMGRlMTMwMDAwAP/bAIQABQYGCwgLCwsLCw0LCwsNDg4NDQ4ODw0ODg4NDxAQEBEREBAQEA8TEhMPEBETFBQTERMWFhYTFhUVFhkWGRYWEgEFBQUKBwoICQkICwgKCAsKCgkJCgoMCQoJCgkMDQsKCwsKCw0MCwsICwsMDAwNDQwMDQoLCg0MDQ0MExQTExOc/8IAEQgAlgCWAwEiAAIRAQMRAf/EAKQAAQACAwEBAQAAAAAAAAAAAAAGBwECBQQDCBAAAgIBAwMCBwEAAAAAAAAAAgMBBAUAEBMRFCASMBUiMjM0QFAjEQABAgMEBQkGAwkAAAAAAAABAhEAAxIhMUFREBMiYXEEIDBScpGhscEyQoHR4fBic/EjM0BTY4KDkqISAQABAwIEBgMBAQAAAAAAAAERACExQVEQYXGBIDCRobHwwdHhQPH/2gAMAwEAAgADAQAAAavAAPceFMZFqqxO+oVfmawrIkkfPmMgFoVfaBV4BLsPBKe3V2r3/Lhtnt+XnZSPiedhYe9cybDzcKwucQ4bFoVfaBV50DqWRz6r0fP5sbsgAAA6Vj1NI9XN51t1ILQq+0NlX5xNsOZHAmEm9tOa5s2srOrDOM/X4zbKLeS6/XrmiGZltiGZ6HOy6PO6XSwjdoVfaGVXzaEzbCEjK+qFvauPnmIfoevZeeWPcSzMIZJvR5WeLDbOpHbH6C/Pva42cYnEImuUKtCr7Qyq+bQmcaoONnbuj8+SnTPusavp7qj2tdS7Z6ZXXk2w6VJ2TKsKQ511UrvhOIx18oxaFX2hlV/c4bDv8CfwAT2BC081WwZw2JPGGEg60JHV5T7kyhE1hGC0KvtDZV4Ol0Y5thqtevzkDIAASvCKTOS1NhvqbFoVfaBV4GcCX9SvOnq9/wAPRNyrvnJOyQnabbHGkEU4xJYiZBktCr7QKvWgKvWgKvWgKvWgKvWgKvWgKvWgKvWgKvWgKvtAP//aAAgBAQABBQL9hKDdNXHwbnUFinEVeQsnUkwshAVdKxrWrIZGfZqU+4inkepqZ2bwumo5eciDCDSsk9cMP1kzJr09DLxXanbl5goqZ27vbTZfzn5qyTR1fDun3Mdwx445oKZY9ChKevtKtGqG24QDazExvWXyMgyZYOfcpXe21kVJPxZknsDWNoxYlOSRJ5bGCqNhGS1wH4xPTVmwTz3x3yL2EeLH6PKgyrthTkX5TIsrGawyKOml4awcPrGidVWcbMmrjft9NHYg5KWxOga9VychFWr213P/AHMD9nEoEjZfabGwN2ttlvm3d+FthXcib2NNJrp9vXb+BiC6WLH5mRRXaeQPskY8OlLSrrFBtkPtbfVR2p2yrGGXrlGUyPc64pZSxeONJrtRYvZ/7tqO7p4YvXXeqVHXrk8tsr8u+O/0VvjqPdFk6SUQZyFJlljNYREyzL2Re3BN9S8eztLF7FjZ0VcMcjVZXKzKN5H7UbHA3IV+Bu2GuCgm4aWMyt0IXrrtTyJVYuXitaTmXLizbZYnWMjiiZ6+H5lf3FrlhZE4UPhWsEg7/FJe3UcusuZ6+UR118OWtVurNcvOjR55s0QaPnE9NY+3ANpMkhCrEos0jrwxRL0AScmgwl6CSTavpVecSGXMjy+1XtGiXXisT8QXYZlW8j8b1lVqGhXsMrPhd4kSxpMn9j//2gAIAQMAAT8B/gzt0851Hsx/Q//aAAgBAgEBPwHS8P0F8NpaAeZfziIBfmXvCYMVQ/MOhOIhVrQbH4ReAIGMJDRloOhQEHBoIvg3DdDseMAvzBBDxTpbQOYDzb+aRFsPDw3Tf//aAAgBAQEGPwL+IZCSowqVMUxSH2WL7niYdStJA2TVUp94FgEGYfZl3b1YQJzJC02TQkuOMcnstVUolvX46NYkPfZiWyhiGIwPRTKVbaQ6UdaBKUlKJShQyQzE4w/tUEizEQtcs01PZffFNWy704Pwg0qKXvax4AC7BgQDBUb1Fy0IQJdUpCQ3urBzBEayjVSwkCqYWsGMAVBYUKgRl0CFzEBQZ1JvpCs8jlCFolSlIWHQsWHfBXSE1YDoGUdYhmKF2giEJk7Q1abrgLYqQqsJsmfhV8ucFzEunA9U5xUs1yjtX2z5hz/CI8hl0S0oUwXfEolOsmTJLEvf2s/1hJWkpqufdzEINylARqDLAkSydlmDAWEwwOyCaeD9ITqws+6T7ubQkzFqlTVpcAmpI3HLm0KXZjmeJ0FS7JaL9+75xq9QkSzYFMPENGtlhh7yct402AngHj2Ff6nnFary3hzOUTuqikcVfY0lr1Jc/wB5+WgoU+tKafq+kDBQIPc8ICGYhy/GK2ZbWHEKGHDQ7BPaNsMtLeR+OhCslCJgwJqH91un8yd5fppYfyR4D6addQl6ApoUlcpIWPLMG+EovDEg7ikxL7HrCu2fIRNnn2UKNPm/wEayogvZbYBk0PmlxuUPrpkL68offjpk/mK9dNOMuz4G6DSkqQfZID/CJ0yYGUpNKQcH9Y/wp9IRvqHhHJ+zMhAmzKFYb3PA4wmXKDVOmrLP4mDvTMPnoVLSrZV65aeSfl/LT2J3n+umoWj3hmIeuncQXgJR+7T4mAlN5lBu6NbNFASC1oxx7oSR7KQpKe42xL7HrFWNIX8U3+sAZFQ+++FIPulopTkT3aeTo6soeP6aeUycSmtPFP2OYXLITf8AKP2a9p2Uh3PGAQWIlJY90MqYpQ3mNbcmWDbvP0jZtSkUvnC5Z90+CvrEyQqxKjs+neIqehed78YmF3WsUvvOXnoQjrKH18IXknZ/1+ulC8HY8DCk4Xp4HSpKywW1uREKWJidWou+Nvh4wOTyy9ztcAnDmEJSk1F7XhJUlIpyhrF9q+HWXyGA0TeUG6Wlk9o/fjzf63J/+kdKEptKrBCOTIul2rOa+aFpw8RlAXKNiw5T1T0hmA1T1bKR1N/3wzh+cwtJimYKl3rUm1Ut7rL2ik2uHBzHQKqLCX7SR7Z4CGQlEqZLBUU3mnCo3P0KlzFHaSRVvifyiZ+0UhFIe2/784XOUWYsj8RxhJVcsWEeXGGUkpN9sMkEnIWwApJSTmGihdivnEmfJc9bFliJPKBsrWjbT8/vCCmWNXLJcjFROfROgtnkYQJjBCTckWb4XKX+5W1BuYj6wtrgyR8PrE5MotPLNgSnd4xTPmbRVsoO0rvwiXMmLVXQApKBa/GFaglKCbixipZKjmf4n//aAAgBAQIBPyH/AEdGYYOrg7tKMsd2MSFab1kTU+rfeTUaxxmAcsltbPpUDwAaDQxtry6VGZnyKLwOyz04BDBQTgskNkmdZtSp2YEJ2fKsZ54DW/28TanTkK0qJOZWztNWkhekQwmcX+aalOp2wphmzGjFMmppiCZmYQZoQAGCkDZjNSpyAIgYLk+9LFcAQX2KxXTNY+6Fn53o7uUBJdq56c6SLhs0rl/ceRE4yBO0MI1ZZuUPJEgVjBz/ABmuc5YJ36uvkZV39QE8786WKWJWZk6B66ZrTzdJim5vkjxJ6C0MmijWPbNWmwMDiLLQxBjGhDL2L5ICzBOnlNwIEc22cjparMKzbKwC5y64a0YkLvdRk6PgF5CB5Les9RmK8VrMyaa5JqdUMaVQWjqRPCfKkYHEMibMszprSkkWqehZNrRr4Bi5ZLztV8VkQADYLv514OZlvEom7Qi62oZJ0zUsOgeqmtWClDSlY2CbJ6cbM7snwr67+KRGEhNGz4EQjCMjsmKhTgFsAIt89/ARoHI34iX2J7QfIOE4SRIs45WCd5qeAmfZyD3KvhTEWcIyRihgKLuInWXszmpTEXxHPasp7BD6AY71Pc3DnoCzwl+4xnaYfZqHPgA/KeJe39g8cDqIdSeAYq6ZhAEoWxiWiDLNuyEAhzSy3UVEdy49K98+dSuYte7Qs9hSqvQx1pyb4IthoRGd6seX+V34CPLg1e5r6nF8v4xF5Fnc9inaps7lCE6ownuU+6z0GEuye4FfY5UaPpTot+QoEuvtQx+aYRHBNHMCk8ozHUuczf8AlWDnvVnwUVFCnkgUhDLSTPHvp8bb73Q8Ru+W+tcyNSFNqAPQZ7VKEiTezvRoGh3aRlJ4xLBpaCCHIIVCgEstOfLRuDPctuUV9DnqAN4j2vwoMrM9Fn4plUfsMPchqwaZC4ASz8dXj6x+vEG2PwAjSFFmWcDrDeijYBBiTuOc70laNFkYwo/koqemKRqyFWI4jspe1Sl2MMKVU5SxWdF8++x9a3BmcT+7HUKbJQIiQBstjRmijZh2WwA0C66X4chg9Jn5KmZkB2Q/LjMn8HfTPaoGzfez0uduOGhzxKidhHNT47cpApebk0KESLU4CWFUJ4SiJYdNPThetQTKxEWS1MIIQSyjuq40oa7VhD7hJ70Dt2C3QPzngYO65n3CiJW6srzc+CI4uGNfypHqc/NCaUBzft6aKbC1v1PuGnhzvZGiZXX+0NKat2ybXdNOkeYLyRBw1fWhEplWVcq5fEzAUQBdVwFA6cnkF1W+zq9JOgA+Fw8uZ5E5YUgnWDJff0q4YkGxsKx5uvcl8hEIolxLI1K6vXLKIVL6WdKaJOE6OpiN7Uc/EID+Dps0c5eSIGJla0P5SQoAARI4elSQrQV6FYMeTS9bU/CAGJkskuUFwVtZlsGJI9N6I2GVtMRIOYx2alIJ2hb4rOenry8lvPNgkhslReMxATdEssTVvbeuGN8TqcPJolKbIxZf3NMesbkAiRP1NOhJWJp3vkF99pvFDrCaiG6INaueuJ09ZJ5lM0nKT9OR/gWfJ//aAAwDAQICAgMCAAAQAAALDiOAAAAO/CAClLAAAPkAAAAnvAGiANNUKYkARAnxX4Q51AXAG7EdX39ACJBJQCBmLAAmJAAACXAAAQT9T1BCAAAAAAQgAAAA/9oACAEDAgE/EOMVH+zHAeIeA/db+E4Kt+GrzrPakjwnlR4cf5//2gAIAQICAT8Q4prOKGaHwr4KPPoixxualAu1aVLNIMvDlw0deFlC9TwgEnPdw+KcMp4LIqzgE7SnJwSeCBHEk5qPhRrQvgWPIDCf8B//2gAIAQECAT8Q8qfO33VHuvB9Cu2iKSQAbczX4uSTjW9RXfRPIoDNzalWpQGg/ZBVmidhPByifz5RZEUGlVDDtmBPKggyxOizi2Cg+7fbFPmclJ3ssZjsItJAj2TAAyToa8+wKYHwDSsm6QxWYQu53p6g7dUaCCkHREATlpnIr7nxEFlqpqlQx1B6MLByOAvdFy0KbvGE2LrgLqta3J6IqqBEHWHdLH6XVfbIZOCFLnWQTtv42vYYm4h/3KJfNYy7pm/QpnF4ZZXIjI01dvDksSGyJHKzotfqxSdygZFki/FU6uygX8t/Ki4KP9Wlloa9kV0kkaqhSzmBWTqNxyR4NDRfOic0sc3h4EgjWYOSplgpggW7hDc9fKPdRiRgQ6SnfzkFw71WSGNtmT1w9eKsRQAMKMM6Q61Lh0SdBA644DBspe1A3iwM2O8mg7nftRRREwdb+CIJHidQAlRBuhWOC10jIBDqNzwIGGBlEo5iTSQ2QsIA7p6l4MJo5Dv0iOGYBikhqIQEjbh6yH7ahuetCOpUdYV3G9L56D99WNoiRor8+pmdbfoUaiv3G6LN5tRBRU+qXYUGi1+1oBrM5mpqcCGAtAk9TzqIdAtjiH2YPPjGTb9YW9JmpAmRkncr18q99dQt1ACSrImwOmaaNy7nFzDmuBXH9m3uqU99WmHUqIdZMbnO5NU1nE6jh/QqDIO9YPSluS+NfYL8cdTzpS/ShTGFgT2dcE5D0tfabFQ7FwGEyoIS6jbo/MpeB3umHoBtQ6glGMrWwNF9hX/L0P2awOhWXxFmAl9s6l7+Lh1DiBIKBMYJcTonJPJaCWp2YoB3GhvBjteehTrX6Fzd8mApbXirwYKnyAHhX9FQBcag0gszivBtqEntYP8ArzWBcdZJ6UJ1ohnSUnwgY0FsFFLA9GjDV4oNiAPh9KzPFu+AH22G40BVlXxypIaUWf0VvqndhX2iWr8KgFUkbhNx+5UIZXqRssDrE1tQVyLlMDz6Ef4mUX5C6ExLdoJadJjeghV7tYdzFBHanI+mjkKF7NH4gzcg0bULM70cZ1cUCr6okl0Jer7E9R1W3cDnQKxs5LpyHEbvC41kyZPPB7nCHamjEStmTmtBz5NVGEkI6JafojLZOfz9zrMAQEdz19VK1eGYsHp4A7NBE5bdJK7q+A8GPcGKEabaemPJ5wFR/AZWgLXqu9Dfm8IIjfv/AISD0Y0UY7TYtd0XHqa/M+8frmMwvOtqHZPKShKOqt3xDZANIIBqrYr44tUrOouzbw+rdW5HkR6cZSTQ7+AqO/nfgzc/QDPjQMwggXES4jhK/k3pB6JlFD8k5zkNn0KW782PuXwpbBBMEC/ECxrqqdkMBhG63oZiMs9haYLIG8mLMdV721oFKUBFsA841r1KJfWWqy5JuXH+giSiznRPMnvq08pBkME352eTZNGnBZ8OGWYb2p/f1E2aagAMauIHZQ5dL4ShvyFc27jEfeEwPVEyt7HQLhkokWX9CRNa30wQYDQGgAbeeMXLJh1KRSqrq3fVv5P/2Q==" alt="CPRC">
+        <div id="rc-logo-cptc" style="display:none;width:120px;height:120px;border-radius:50%;background:#0a0a0f;border:2px solid rgba(200,240,224,0.3);align-items:center;justify-content:center;flex-direction:column;gap:2px;">
+          <div style="font-family:'DM Mono',monospace;font-size:0.45rem;letter-spacing:0.18em;color:rgba(200,240,224,0.6);text-transform:uppercase;">central park</div>
+          <div style="font-family:Georgia,serif;font-size:1.8rem;font-weight:700;color:#c8f0e0;letter-spacing:0.05em;">CPTC</div>
+          <div style="font-family:'DM Mono',monospace;font-size:0.45rem;letter-spacing:0.18em;color:rgba(200,240,224,0.6);text-transform:uppercase;">track club</div>
+        </div>
+      </div>
+
+      <div class="rc-section-title">event details</div>
+
+      <div class="rc-field">
+        <label class="rc-label">event name</label>
+        <input class="rc-input" id="rc-event-name" type="text" placeholder="Tuesday Night Run" value="Tuesday Night Run">
+      </div>
+
+      <div class="rc-field">
+        <label class="rc-label">type</label>
+        <div class="rc-types">
+          <button class="rc-type-btn active" data-type="Fun Run">Fun Run</button>
+          <button class="rc-type-btn" data-type="Speed Run">Speed Run</button>
+          <button class="rc-type-btn" data-type="Tempo Run">Tempo Run</button>
+          <button class="rc-type-btn" data-type="Race">Race</button>
+        </div>
+      </div>
+
+      <div class="rc-field">
+        <label class="rc-label">date</label>
+        <input class="rc-input" id="rc-date" type="date">
+      </div>
+
+      <div class="rc-field">
+        <label class="rc-label">distance (optional)</label>
+        <input class="rc-input" id="rc-distance" type="text" placeholder="5 km">
+      </div>
+
+      <div class="rc-field">
+        <label class="rc-label">tagline (optional)</label>
+        <input class="rc-input" id="rc-tagline" type="text" placeholder="See you at the Boathouse ✦">
+      </div>
+
+      <div class="rc-section-title" style="margin-top:20px;">format</div>
+      <div class="format-btns" id="rc-fmt-btns" style="margin-bottom:20px;">
+        <button class="format-btn active" data-fmt="square">square</button>
+        <button class="format-btn" data-fmt="portrait">portrait</button>
+        <button class="format-btn" data-fmt="story">story</button>
+      </div>
+
+      <div class="rc-section-title">route (optional)</div>
+      <div class="rc-field">
+        <label class="rc-label">from your last activities</label>
+        <select class="rc-input" id="rc-activity-select" style="cursor:pointer;">
+          <option value="">— no route —</option>
+        </select>
+      </div>
+      <div class="rc-field" id="rc-route-pos-row">
+        <label class="rc-label">route position</label>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button class="color-mode-btn active" data-rpos="bottom" id="rc-pos-bottom" onclick="setRcRoutePos('bottom')">bottom strip</button>
+          <button class="color-mode-btn" data-rpos="corner" id="rc-pos-corner" onclick="setRcRoutePos('corner')">corner</button>
+          <button class="color-mode-btn" data-rpos="full" id="rc-pos-full" onclick="setRcRoutePos('full')">full bg</button>
+        </div>
+      </div>
+      <div class="rc-field" id="rc-route-color-row">
+        <label class="rc-label">route color</label>
+        <div style="display:flex;gap:5px;">
+          <button class="color-mode-btn active" id="rc-route-white" onclick="setRcRouteColor('white')">white</button>
+          <button class="color-mode-btn" id="rc-route-black" onclick="setRcRouteColor('black')">black</button>
+        </div>
+      </div>
+
+      <div class="rc-section-title">background</div>
+      <div style="display:flex;gap:6px;margin-bottom:16px;">
+        <button class="color-mode-btn active" id="rc-bg-dark" onclick="setRcBg('dark')">dark</button>
+        <button class="color-mode-btn" id="rc-bg-light" onclick="setRcBg('light')">light</button>
+      </div>
+
+      <div class="rc-section-title">background photo (optional)</div>
+      <div id="rc-photo-drop" style="border:1px dashed rgba(255,255,255,0.1);padding:14px;text-align:center;cursor:pointer;font-size:0.56rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:20px;transition:all 0.2s;">drop photo or click to upload</div>
+      <input type="file" id="rc-photo-input" accept="image/*" style="display:none">
+
+      <div class="dl-btns">
+        <button class="dl-btn" id="rc-dl">↓ download</button>
+      </div>
+    </div>
+
+    <!-- right: preview -->
+    <div>
+      <div class="rc-section-title">preview</div>
+      <div class="preview-wrap">
+        <canvas id="rc-canvas"></canvas>
+      </div>
+      <div class="preview-label" id="rc-preview-label">1080 × 1080 px</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- VIDEO VIEW -->
+<div id="view-video" class="view-pane">
+  <div style="margin-bottom:24px;">
+    <div style="font-family:'Cormorant',serif;font-weight:300;font-style:italic;font-size:2rem;color:var(--accent);margin-bottom:4px;">route video</div>
+    <div style="font-size:0.6rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;">draw your runs one by one</div>
+  </div>
+  <div class="video-layout">
+    <!-- controls -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <div>
+        <div class="rc-section-title">city</div>
+        <select class="rc-input" id="vid-city-select" style="cursor:pointer;">
+          <option value="all">all activities</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="rc-section-title">duration</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="range" id="vid-duration" min="10" max="120" value="30" style="flex:1;">
+          <span id="vid-duration-val" style="font-size:0.6rem;color:var(--muted);width:40px;">30s</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="rc-section-title">theme</div>
+        <div style="display:flex;gap:6px;">
+          <button class="color-mode-btn active" id="vid-dark-btn" onclick="setVidTheme('dark')">dark</button>
+          <button class="color-mode-btn" id="vid-light-btn" onclick="setVidTheme('light')">light</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="rc-section-title">size</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="color-mode-btn active" id="vid-sq-btn" onclick="setVidSize('square')">square</button>
+          <button class="color-mode-btn" id="vid-story-btn" onclick="setVidSize('story')">story</button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;gap:8px;">
+          <button class="vid-btn primary" id="vid-preview-btn">▶ preview</button>
+          <button class="vid-btn" id="vid-stop-btn" disabled>■ stop</button>
+        </div>
+        <button class="vid-btn primary" id="vid-export-btn">↓ export video</button>
+        <div class="vid-status" id="vid-status">choose a city and press preview</div>
+      </div>
+    </div>
+
+    <!-- preview canvas -->
+    <div>
+      <div class="rc-section-title">preview</div>
+      <div class="video-canvas-wrap" id="vid-canvas-wrap">
+        <canvas id="vid-canvas"></canvas>
+        <div class="video-progress-bar" id="vid-progress-bar"></div>
+        <div class="video-counter" id="vid-counter"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE VIEW -->
+<div id="view-share" class="view-pane">
+  <div style="margin-bottom:28px;">
+    <div style="font-family:'Cormorant',serif;font-weight:300;font-style:italic;font-size:2rem;color:var(--accent);margin-bottom:4px;">share your routes</div>
+    <div style="font-size:0.6rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;">compose an image to post</div>
+  </div>
+  <div class="share-layout">
+    <!-- left: controls -->
+    <div>
+      <div class="share-panel-title">format</div>
+      <div class="format-btns">
+        <button class="format-btn active" data-fmt="square">square (1:1)</button>
+        <button class="format-btn" data-fmt="portrait">portrait (4:5)</button>
+        <button class="format-btn" data-fmt="story">story (9:16)</button>
+      </div>
+
+      <div class="share-panel-title">background photo</div>
+      <div class="photo-drop" id="photo-drop">
+        <div class="photo-drop-label">drop a photo or click to upload</div>
+        <div class="photo-drop-sub">optional · jpg / png</div>
+        <input type="file" id="photo-input" accept="image/*" style="display:none">
+      </div>
+
+      <div class="share-panel-title">options</div>
+      <div class="share-options">
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">city / view</div><div class="share-opt-sub">which routes to draw</div></div>
+          <select class="city-select" id="share-city-select">
+            <option value="all">all activities</option>
+          </select>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">route scale</div><div class="share-opt-sub">zoom in or out</div></div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="range" id="share-route-scale" min="20" max="100" value="84" style="width:90px;">
+            <span id="share-scale-val" style="font-size:0.54rem;color:var(--muted);width:28px;">84%</span>
+          </div>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">show watermark</div></div>
+          <label class="toggle"><input type="checkbox" id="share-watermark" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">dark overlay</div><div class="share-opt-sub">dims photo for contrast</div></div>
+          <label class="toggle"><input type="checkbox" id="share-overlay" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">background</div><div class="share-opt-sub">map color when no photo</div></div>
+          <div style="display:flex;gap:5px;">
+            <button class="color-mode-btn active" data-bg="dark" id="bg-dark-btn" onclick="setShareBg('dark')">dark</button>
+            <button class="color-mode-btn" data-bg="light" id="bg-light-btn" onclick="setShareBg('light')">light</button>
+          </div>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">route color</div><div class="share-opt-sub">independent of background</div></div>
+          <div style="display:flex;gap:5px;">
+            <button class="color-mode-btn active" id="route-auto-btn" onclick="setRouteColor('auto')">auto</button>
+            <button class="color-mode-btn" id="route-white-btn" onclick="setRouteColor('white')">white</button>
+            <button class="color-mode-btn" id="route-black-btn" onclick="setRouteColor('black')">black</button>
+          </div>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">border</div><div class="share-opt-sub">frame around image</div></div>
+          <div style="display:flex;gap:5px;">
+            <button class="color-mode-btn active" data-border="none" id="border-none-btn" onclick="setShareBorder('none')">none</button>
+            <button class="color-mode-btn" data-border="white" id="border-white-btn" onclick="setShareBorder('white')">white</button>
+            <button class="color-mode-btn" data-border="black" id="border-black-btn" onclick="setShareBorder('black')">black</button>
+          </div>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">show logo</div></div>
+          <label class="toggle"><input type="checkbox" id="share-logo" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="share-opt-row">
+          <div><div class="share-opt-label">activity summary</div><div class="share-opt-sub">runs · rides · km overlay</div></div>
+          <label class="toggle"><input type="checkbox" id="share-summary" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="share-opt-row" id="summary-pos-row">
+          <div><div class="share-opt-label">summary position</div></div>
+          <div class="pos-picker" id="pos-picker">
+            <button class="pos-btn" data-pos="tl" title="top left"></button>
+            <button class="pos-btn" data-pos="tc" title="top center"></button>
+            <button class="pos-btn" data-pos="tr" title="top right"></button>
+            <button class="pos-btn" data-pos="ml" title="mid left"></button>
+            <button class="pos-btn center active" data-pos="mc" title="center"></button>
+            <button class="pos-btn" data-pos="mr" title="mid right"></button>
+            <button class="pos-btn" data-pos="bl" title="bottom left"></button>
+            <button class="pos-btn" data-pos="bc" title="bottom center"></button>
+            <button class="pos-btn active" data-pos="br" title="bottom right"></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dl-btns">
+        <button class="dl-btn" id="dl-composed">↓ download image</button>
+        <button class="dl-btn transparent-btn" id="dl-transparent">↓ transparent routes</button>
+      </div>
+    </div>
+
+    <!-- right: preview -->
+    <div>
+      <div class="share-panel-title">preview</div>
+      <div class="preview-wrap" id="preview-wrap">
+        <canvas id="share-canvas"></canvas>
+      </div>
+      <div class="preview-label" id="preview-label">1080 × 1080 px</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  var CLIENT_ID     = '216389';
+  var CLIENT_SECRET = '3b930e6b106fd63760d36bcce60e572c8f531385';
+  var REDIRECT_URI  = window.location.href.split('?')[0].split('#')[0];
+
+  var map = L.map('map',{zoomControl:false}).setView([19.4,-99.15],12);
+  var baseTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19});
+  baseTile.addTo(map);
+  var canvasRenderer = L.canvas({padding:0.5});
+  var lineLayer = L.featureGroup().addTo(map);
+
+  var activities=[], cities=[];
+  var mapRendered = false;
+  var colorMode='type', customColor='#8be8c8', densityMode=false;
+  var RUN_COLOR='#8be8c8', RIDE_COLOR='#f0b86e';
+  var SC_COLORS={runBase:'#f0f0f0',runT1:'#f472b6',runT2:'#e11d48',runT3:'#dc2626',rideBase:'#f0f0f0',rideT1:'#fde68a',rideT2:'#f59e0b',rideT3:'#ea580c'};
+  var SC_FONT=0;
+  var SC_FONT_FAMILIES=[
+    {title:'italic 300 {sz}px Cormorant, serif',body:'300 {sz}px DM Mono, monospace'},
+    {title:'300 {sz}px Futura, "Century Gothic", sans-serif',body:'300 {sz}px Futura, "Century Gothic", sans-serif'},
+    {title:'italic 300 {sz}px Garamond, "Times New Roman", serif',body:'300 {sz}px DM Mono, monospace'},
+    {title:'300 {sz}px DM Mono, monospace',body:'300 {sz}px DM Mono, monospace'}
+  ];
+  function scFont(style,sz){return SC_FONT_FAMILIES[SC_FONT][style].replace('{sz}',sz);}
+  var SC_VID={duration:30,theme:'dark',size:'square'};
+  function setScVidTheme(v){SC_VID.theme=v;document.getElementById('sc-vid-dark').classList.toggle('active',v==='dark');document.getElementById('sc-vid-light').classList.toggle('active',v==='light');}
+  function setScVidSize(v){SC_VID.size=v;document.getElementById('sc-vid-sq').classList.toggle('active',v==='square');document.getElementById('sc-vid-story').classList.toggle('active',v==='story');}
+  var palette=['#8be8c8','#a0d4f0','#c8f0e0','#70d4b8','#b0e8f8','#60c8a8','#d0f4e8','#90c8e0'];
+
+  // cityFits[cityName] = { minLat, maxLat, minLng, maxLng }
+  var cityFits = {};
+  var fitDrawMode = null; // null or cityName being set
+  var fitDrawStart = null; // {x,y,lat,lng}
+
+  // ── fit draw ─────────────────────────────────────────────
+  var fitOverlay  = document.getElementById('fit-draw-overlay');
+  var fitBanner   = document.getElementById('fit-draw-banner');
+  var fitSvg      = document.getElementById('fit-draw-line');
+  var fitLineEl   = document.getElementById('fit-line-el');
+  var fitDotA     = document.getElementById('fit-dot-a');
+  var fitDotB     = document.getElementById('fit-dot-b');
+
+  function startFitDraw(cityName) {
+    fitDrawMode = cityName;
+    fitOverlay.classList.add('active');
+    fitBanner.classList.add('active');
+    fitSvg.style.display = 'block';
+    fitLineEl.setAttribute('x1',0); fitLineEl.setAttribute('y1',0);
+    fitLineEl.setAttribute('x2',0); fitLineEl.setAttribute('y2',0);
+    fitDotA.setAttribute('cx',0); fitDotA.setAttribute('cy',0);
+    fitDotB.setAttribute('cx',0); fitDotB.setAttribute('cy',0);
+    map.dragging.disable(); map.scrollWheelZoom.disable();
+  }
+
+  function stopFitDraw() {
+    fitDrawMode = null; fitDrawStart = null;
+    fitOverlay.classList.remove('active');
+    fitBanner.classList.remove('active');
+    fitSvg.style.display = 'none';
+    map.dragging.enable(); map.scrollWheelZoom.enable();
+    // refresh tree to update button state
+    refreshTreeFitBtns();
+  }
+
+  fitOverlay.addEventListener('mousedown', function(e) {
+    if (!fitDrawMode) return;
+    var rect = fitOverlay.getBoundingClientRect();
+    var px = e.clientX - rect.left, py = e.clientY - rect.top;
+    var latlng = map.containerPointToLatLng([px, py]);
+    fitDrawStart = { x:px, y:py, lat:latlng.lat, lng:latlng.lng };
+    fitDotA.setAttribute('cx', px); fitDotA.setAttribute('cy', py);
+    fitLineEl.setAttribute('x1',px); fitLineEl.setAttribute('y1',py);
+    fitLineEl.setAttribute('x2',px); fitLineEl.setAttribute('y2',py);
+  });
+
+  fitOverlay.addEventListener('mousemove', function(e) {
+    if (!fitDrawStart) return;
+    var rect = fitOverlay.getBoundingClientRect();
+    var px = e.clientX - rect.left, py = e.clientY - rect.top;
+    fitLineEl.setAttribute('x2', px); fitLineEl.setAttribute('y2', py);
+    fitDotB.setAttribute('cx', px); fitDotB.setAttribute('cy', py);
+  });
+
+  fitOverlay.addEventListener('mouseup', function(e) {
+    if (!fitDrawStart || !fitDrawMode) return;
+    var rect = fitOverlay.getBoundingClientRect();
+    var px = e.clientX - rect.left, py = e.clientY - rect.top;
+    var latlng = map.containerPointToLatLng([px, py]);
+    var lat1 = fitDrawStart.lat, lng1 = fitDrawStart.lng;
+    var lat2 = latlng.lat, lng2 = latlng.lng;
+    // store as bounding box
+    cityFits[fitDrawMode] = {
+      minLat: Math.min(lat1,lat2), maxLat: Math.max(lat1,lat2),
+      minLng: Math.min(lng1,lng2), maxLng: Math.max(lng1,lng2)
+    };
+    var cityName = fitDrawMode;
+    stopFitDraw();
+    // immediately apply fit
+    applyFit(cityName);
+  });
+
+  function applyFit(cityName) {
+    var fit = cityFits[cityName];
+    if (!fit) return;
+    map.fitBounds([[fit.minLat, fit.minLng],[fit.maxLat, fit.maxLng]], {padding:[20,20]});
+  }
+
+  function refreshTreeFitBtns() {
+    document.querySelectorAll('.tree-fit-btn').forEach(function(btn){
+      var cn = btn.dataset.city;
+      btn.classList.toggle('has-fit', !!cityFits[cn]);
+      btn.textContent = cityFits[cn] ? '✓ fit set' : 'set fit';
+    });
+  }
+
+  function goToMapTab() {
+    document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+    document.querySelector('[data-tab="map"]').classList.add('active');
+    document.getElementById('view-map').classList.add('active');
+    document.getElementById('view-summary').classList.remove('active');
+    document.getElementById('view-share').classList.remove('active');
+    setTimeout(function(){map.invalidateSize();},50);
+  }
+
+  // ── tab switching ────────────────────────────────────────
+  // cog button wired after DOM ready
+  window.addEventListener('load', function(){
+    var cogBtn = document.getElementById('cog-btn');
+    if(!cogBtn) return;
+    cogBtn.addEventListener('click', function(){
+      var isActive = document.getElementById('view-settings').classList.contains('active');
+      if(isActive){
+        document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+        document.querySelector('.tab-btn[data-tab="summary"]').classList.add('active');
+        document.querySelectorAll('.view-pane').forEach(function(v){v.classList.remove('active');});
+        document.getElementById('view-summary').classList.add('active');
+        cogBtn.classList.remove('active');
+      } else {
+        document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+        document.querySelectorAll('.view-pane').forEach(function(v){v.classList.remove('active');});
+        document.getElementById('view-settings').classList.add('active');
+        cogBtn.classList.add('active');
+        initSettings();
+      }
+    });
+  });
+
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      var t=btn.dataset.tab;
+      document.getElementById('view-map').classList.toggle('active', t==='map');
+      document.getElementById('view-summary').classList.toggle('active', t==='summary');
+      document.getElementById('view-share').classList.toggle('active', t==='share');
+      document.getElementById('view-last').classList.toggle('active', t==='last');
+      document.getElementById('view-runclub').classList.toggle('active', t==='runclub');
+      document.getElementById('view-video').classList.toggle('active', t==='video');
+      document.getElementById('view-settings').classList.toggle('active', t==='settings');
+      document.getElementById('view-marathons').classList.toggle('active', t==='marathons');
+      if (t==='map') {
+        setTimeout(function(){map.invalidateSize();},50);
+        if(!mapRendered && activities.length){ initMapRender(); }
+      }
+      if (t==='summary') { if(activities.length) renderSummary(); }
+      if (t==='last') { if(activities.length) renderLastActivities(); }
+      if (t==='share' && activities.length) initShare();
+      if (t==='runclub') { initRunClub(); }
+      if (t==='video') { initVideo(); }
+      if (t==='settings') { initSettings(); }
+      if (t==='marathons') { renderMarathons(); }
+      // sync cog active state
+      var cb=document.getElementById('cog-btn'); if(cb) cb.classList.toggle('active', t==='settings');
+    });
+  });
+
+  // ── utils ────────────────────────────────────────────────
+  function decodePoly(enc){
+    var pts=[],i=0,lat=0,lng=0;
+    while(i<enc.length){var b,s=0,r=0;do{b=enc.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lat+=(r&1)?~(r>>1):(r>>1);s=0;r=0;do{b=enc.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lng+=(r&1)?~(r>>1):(r>>1);pts.push([lat/1e5,lng/1e5]);}return pts;
+  }
+  function getType(act){var t=(act.sport_type||act.type||'').toLowerCase();return(t.indexOf('ride')>=0||t==='cycling')?'ride':'run';}
+  function fmtKm(m){return(m/1000).toFixed(1)+' km';}
+  function fmtTime(s){var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h?h+'h '+m+'m':m+'m';}
+
+  function colorFor(item,idx){
+    if(colorMode==='type') return item.type==='ride'?RIDE_COLOR:RUN_COLOR;
+    if(colorMode==='multi') return palette[idx%palette.length];
+    if(colorMode==='single') return customColor;
+    if(colorMode==='white') return 'rgba(255,255,255,0.55)';
+    return RUN_COLOR;
+  }
+  function lerpColor(t){
+    var r0=15,g0=30,b0=80,r1=30,g1=200,b1=160,r2=255,g2=220,b2=80,r,g,b;
+    if(t<0.5){var s=t/0.5;r=r0+s*(r1-r0);g=g0+s*(g1-g0);b=b0+s*(b1-b0);}
+    else{var s=(t-0.5)/0.5;r=r1+s*(r2-r1);g=g1+s*(g2-g1);b=b1+s*(b2-b1);}
+    return 'rgb('+Math.round(r)+','+Math.round(g)+','+Math.round(b)+')';
+  }
+  function getVisible(){return activities.filter(function(x){return x.visible;});}
+
+  // ── chaikin smoothing ────────────────────────────────────
+  // runs 2 passes of Chaikin's corner cutting — keeps shape honest
+  // but rounds sharp corners without adding fake data
+  function chaikin(pts, passes) {
+    if (pts.length < 3) return pts;
+    for (var p = 0; p < passes; p++) {
+      var out = [pts[0]];
+      for (var i = 0; i < pts.length - 1; i++) {
+        var p0 = pts[i], p1 = pts[i+1];
+        out.push([p0[0]*0.75 + p1[0]*0.25, p0[1]*0.75 + p1[1]*0.25]);
+        out.push([p0[0]*0.25 + p1[0]*0.75, p0[1]*0.25 + p1[1]*0.75]);
+      }
+      out.push(pts[pts.length-1]);
+      pts = out;
+    }
+    return pts;
+  }
+
+  // Douglas-Peucker simplification
+  function dpSimplify(pts, tolerance) {
+    if(pts.length <= 2) return pts;
+    var maxDist=0, maxIdx=0;
+    var start=pts[0], end=pts[pts.length-1];
+    var dx=end[1]-start[1], dy=end[0]-start[0];
+    var len=Math.sqrt(dx*dx+dy*dy)||1;
+    for(var i=1;i<pts.length-1;i++){
+      var d=Math.abs(dy*(pts[i][1]-start[1])-dx*(pts[i][0]-start[0]))/len;
+      if(d>maxDist){maxDist=d;maxIdx=i;}
+    }
+    if(maxDist>tolerance){
+      var l=dpSimplify(pts.slice(0,maxIdx+1),tolerance);
+      var r=dpSimplify(pts.slice(maxIdx),tolerance);
+      return l.slice(0,-1).concat(r);
+    }
+    return [start,end];
+  }
+  function simplifyPts(pts){ return dpSimplify(pts, 0.00003); } // ~3m tolerance
+  function smoothPts(pts) { return chaikin(simplifyPts(pts), 2); }
+
+  // ── render map lines ─────────────────────────────────────
+  // ── distance-based gradient color ──────────────────────────
+  // Approximate geodesic distance in km between two lat/lng points
+  function segDist(p1, p2) {
+    var R=6371, dLat=(p2[0]-p1[0])*Math.PI/180, dLng=(p2[1]-p1[1])*Math.PI/180;
+    var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(p1[0]*Math.PI/180)*Math.cos(p2[0]*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
+
+  function hexToRgb(hex){
+    var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+    return [r,g,b];
+  }
+
+  function lerpRgb(a,b,t){
+    return [Math.round(a[0]+t*(b[0]-a[0])),Math.round(a[1]+t*(b[1]-a[1])),Math.round(a[2]+t*(b[2]-a[2]))];
+  }
+
+  function toHex(rgb){ return '#'+rgb.map(function(v){return ('0'+v.toString(16)).slice(-2);}).join(''); }
+
+  // Returns color string for a point at `kmSoFar` in a run of total distance `totalKm`
+  // All routes start white. Color shift kicks in for longer activities.
+  function distanceColor(type, totalKm, kmSoFar) {
+    var white  = hexToRgb(type==='run'?SC_COLORS.runBase:SC_COLORS.rideBase);
+    if (type === 'run') {
+      var pink    = hexToRgb(SC_COLORS.runT1);
+      var hotpink = hexToRgb(SC_COLORS.runT2);
+      var red     = hexToRgb(SC_COLORS.runT3);
+      if (totalKm >= 30) {
+        if (kmSoFar < 12) return toHex(white);
+        if (kmSoFar < 20) return toHex(lerpRgb(white, pink, (kmSoFar-12)/8));
+        if (kmSoFar < 30) return toHex(lerpRgb(pink, hotpink, (kmSoFar-20)/10));
+        return toHex(lerpRgb(hotpink, red, Math.min((kmSoFar-30)/3,1)));
+      } else if (totalKm >= 20) {
+        if (kmSoFar < 12) return toHex(white);
+        if (kmSoFar < 20) return toHex(lerpRgb(white, pink, (kmSoFar-12)/8));
+        return toHex(lerpRgb(pink, hotpink, Math.min((kmSoFar-20)/3,1)));
+      } else if (totalKm >= 12) {
+        if (kmSoFar < 10) return toHex(white);
+        return toHex(lerpRgb(white, pink, Math.min((kmSoFar-10)/2,1)));
+      }
+      return toHex(white);
+    } else {
+      // ride — thresholds: 30, 60, 130km
+      var yellow = hexToRgb(SC_COLORS.rideT1);
+      var amber  = hexToRgb(SC_COLORS.rideT2);
+      var orange = hexToRgb(SC_COLORS.rideT3);
+      if (totalKm >= 130) {
+        if (kmSoFar < 30)  return toHex(white);
+        if (kmSoFar < 60)  return toHex(lerpRgb(white, yellow, (kmSoFar-30)/30));
+        if (kmSoFar < 130) return toHex(lerpRgb(yellow, amber, (kmSoFar-60)/70));
+        return toHex(lerpRgb(amber, orange, Math.min((kmSoFar-130)/20,1)));
+      } else if (totalKm >= 60) {
+        if (kmSoFar < 30)  return toHex(white);
+        if (kmSoFar < 60)  return toHex(lerpRgb(white, yellow, (kmSoFar-30)/30));
+        return toHex(lerpRgb(yellow, amber, Math.min((kmSoFar-60)/10,1)));
+      } else if (totalKm >= 30) {
+        if (kmSoFar < 20) return toHex(white);
+        return toHex(lerpRgb(white, yellow, Math.min((kmSoFar-20)/10,1)));
+      }
+      return toHex(white);
+    }
+  }
+
+  // Draw a gradient polyline on a Leaflet map using tiny L.polyline segments
+  function drawGradientPolyline(pts, type, totalKm) {
+    var lines = [];
+    var kmSoFar = 0;
+    var sPts = smoothPts(pts);
+    for (var i=0; i<sPts.length-1; i++) {
+      var c1 = distanceColor(type, totalKm, kmSoFar);
+      var segKm = segDist(sPts[i], sPts[i+1]);
+      kmSoFar += segKm;
+      var line = L.polyline([sPts[i], sPts[i+1]], {
+        color: c1, weight:1.5, opacity:0.85,
+        smoothFactor:0, lineJoin:'round', lineCap:'round'
+      }).addTo(lineLayer);
+      lines.push(line);
+    }
+    return lines;
+  }
+
+  function renderLines(){
+    if(!mapRendered) return; // map not open yet
+    lineLayer.clearLayers();
+    var vis=getVisible();
+    if(densityMode){renderDensity(vis);}
+    else{
+      vis.forEach(function(item,i){
+        var totalKm = item.act.distance/1000;
+        var needsGradient = (item.type==='run' && totalKm>=12) || (item.type==='ride' && totalKm>=30);
+        if(needsGradient && colorMode==='type'){
+          item.color = distanceColor(item.type, totalKm, 0);
+          item.lines = drawGradientPolyline(item.pts, item.type, totalKm);
+          item.line = item.lines[0]; // for zoom purposes
+        } else {
+          var c=colorFor(item,activities.indexOf(item));
+          item.color=c;
+          item.line=L.polyline(smoothPts(item.pts),{color:c,weight:1.5,opacity:0.75,smoothFactor:0,lineJoin:'round',lineCap:'round',renderer:canvasRenderer}).addTo(lineLayer);
+        }
+      });
+    }
+  }
+  function renderDensity(vis){
+    var GRID=0.0008,grid={};
+    vis.forEach(function(item){item.pts.forEach(function(p){var k=Math.round(p[0]/GRID)+'_'+Math.round(p[1]/GRID);grid[k]=(grid[k]||0)+1;});});
+    var max=Math.max.apply(null,Object.values(grid).concat([1]));
+    vis.forEach(function(item){
+      var cc=[];item.pts.forEach(function(p){var k=Math.round(p[0]/GRID)+'_'+Math.round(p[1]/GRID);cc.push(grid[k]||1);});
+      cc.sort(function(a,b){return a-b;});var p75=cc[Math.floor(cc.length*0.75)];
+      var ratio=Math.pow(Math.log(1+p75)/Math.log(1+max),0.55);
+      var color=colorMode==='type'?lerpColor(ratio):colorFor(item,activities.indexOf(item));
+      item.color=color;
+      item.line=L.polyline(smoothPts(item.pts),{color:color,weight:1.5,opacity:0.08+ratio*0.92,smoothFactor:0,lineJoin:'round',lineCap:'round',renderer:canvasRenderer}).addTo(lineLayer);
+    });
+  }
+
+  // ── cluster ──────────────────────────────────────────────
+  function clusterActivities(items){
+    var R=0.5,cl=[];
+    items.forEach(function(item){var c=item.center,found=false;for(var i=0;i<cl.length;i++){var d=Math.sqrt(Math.pow(c[0]-cl[i].lat,2)+Math.pow(c[1]-cl[i].lng,2));if(d<R){cl[i].items.push(item);cl[i].lat=cl[i].items.reduce(function(s,x){return s+x.center[0];},0)/cl[i].items.length;cl[i].lng=cl[i].items.reduce(function(s,x){return s+x.center[1];},0)/cl[i].items.length;found=true;break;}}if(!found)cl.push({lat:c[0],lng:c[1],items:[item],name:'...'});});
+    cl.sort(function(a,b){return b.items.length-a.items.length;});return cl.slice(0,6);
+  }
+  async function getCityName(lat,lng){
+    try{var r=await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lng+'&zoom=10');var d=await r.json();return d.address.city||d.address.town||d.address.state||d.address.country||'Unknown';}catch(e){return 'Unknown';}
+  }
+
+  // ── summary view ─────────────────────────────────────────
+  function renderSummary(){
+    var allRuns  = activities.filter(function(x){return x.type==='run';});
+    var allRides = activities.filter(function(x){return x.type==='ride';});
+    var totalKm  = activities.reduce(function(s,x){return s+x.act.distance;},0);
+    var runKm    = allRuns.reduce(function(s,x){return s+x.act.distance;},0);
+    var rideKm   = allRides.reduce(function(s,x){return s+x.act.distance;},0);
+
+    document.getElementById('summary-sub').textContent =
+      allRuns.length+' runs · '+allRides.length+' rides';
+
+    // totals
+    var tot = document.getElementById('summary-totals');
+    tot.innerHTML = [
+      {val: activities.length,                               label:'activities',     cls:''},
+      {val: (totalKm/1000).toFixed(0)+' km',                label:'total distance', cls:''},
+      {val: allRuns.length+' / '+(runKm/1000).toFixed(0)+' km',   label:'runs',   cls:'run-col'},
+      {val: allRides.length+' / '+(rideKm/1000).toFixed(0)+' km', label:'rides',  cls:'ride-col'},
+    ].map(function(c){
+      return '<div class="total-card"><div class="total-card-val '+c.cls+'">'+c.val+'</div><div class="total-card-label">'+c.label+'</div></div>';
+    }).join('');
+
+    // group by year
+    var yearMap = {};
+    activities.forEach(function(item){
+      var y = new Date(item.act.start_date_local).getFullYear();
+      if(!yearMap[y]) yearMap[y]={runs:0,runKm:0,rides:0,rideKm:0};
+      if(item.type==='run'){ yearMap[y].runs++; yearMap[y].runKm+=item.act.distance; }
+      else { yearMap[y].rides++; yearMap[y].rideKm+=item.act.distance; }
+    });
+
+    var years = Object.keys(yearMap).map(Number).sort(function(a,b){return b-a;});
+    var maxKm = Math.max.apply(null, years.map(function(y){
+      return (yearMap[y].runKm+yearMap[y].rideKm)/1000;
+    }).concat([1]));
+
+    var tbody = document.getElementById('year-tbody');
+    tbody.innerHTML = '';
+    years.forEach(function(y){
+      var d = yearMap[y];
+      var totalYearKm = (d.runKm+d.rideKm)/1000;
+      var barPct = (totalYearKm/maxKm*100).toFixed(1);
+      var runBarPct = totalYearKm>0?(d.runKm/1000/totalYearKm*100).toFixed(1):0;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><span class="year-label">'+y+'</span></td>'+
+        '<td class="num" style="color:var(--run-color)">'+d.runs+'</td>'+
+        '<td class="num" style="color:var(--run-color)">'+(d.runKm/1000).toFixed(0)+'</td>'+
+        '<td class="num" style="color:var(--ride-color)">'+d.rides+'</td>'+
+        '<td class="num" style="color:var(--ride-color)">'+(d.rideKm/1000).toFixed(0)+'</td>'+
+        '<td class="num">'+totalYearKm.toFixed(0)+'</td>'+
+        '<td class="bar-cell">'+
+          '<div class="inline-bar-wrap" style="width:'+barPct+'%">'+
+            '<div class="inline-bar" style="width:'+runBarPct+'%;background:var(--run-color);display:inline-block;height:100%"></div>'+
+            '<div class="inline-bar" style="width:'+(100-parseFloat(runBarPct))+'%;background:var(--ride-color);display:inline-block;height:100%"></div>'+
+          '</div>'+
+        '</td>';
+      tbody.appendChild(tr);
+    });
+
+    // totals row
+    var tr = document.createElement('tr');
+    tr.className = 'total-row';
+    tr.innerHTML =
+      '<td><span class="year-label">total</span></td>'+
+      '<td class="num">'+allRuns.length+'</td>'+
+      '<td class="num">'+(runKm/1000).toFixed(0)+'</td>'+
+      '<td class="num">'+allRides.length+'</td>'+
+      '<td class="num">'+(rideKm/1000).toFixed(0)+'</td>'+
+      '<td class="num">'+(totalKm/1000).toFixed(0)+'</td>'+
+      '<td></td>';
+    tbody.appendChild(tr);
+
+    // ── hotspots ──────────────────────────────────────────────
+    renderHotspots();
+  }
+
+  function computeHotspots() {
+    var GRID = 0.002; // ~220m cells
+    var MERGE_RADIUS = 0.01; // ~1km merge radius for adjacent cells
+    var grid = {};
+
+    // count every GPS point across all activities
+    activities.forEach(function(item) {
+      item.pts.forEach(function(p) {
+        var key = Math.round(p[0]/GRID)+'_'+Math.round(p[1]/GRID);
+        if (!grid[key]) grid[key] = { lat: Math.round(p[0]/GRID)*GRID, lng: Math.round(p[1]/GRID)*GRID, count: 0, acts: {} };
+        grid[key].count++;
+        grid[key].acts[item.act.id] = true;
+      });
+    });
+
+    // sort cells by count, take top candidates
+    var cells = Object.values(grid).sort(function(a,b){ return b.count-a.count; });
+
+    // greedy merge: build hotspot clusters
+    var hotspots = [];
+    cells.forEach(function(cell) {
+      if (cell.count < 10) return; // ignore very sparse cells
+      // check if this cell is close to an existing hotspot
+      var merged = false;
+      for (var i=0; i<hotspots.length; i++) {
+        var h = hotspots[i];
+        var d = Math.sqrt(Math.pow(cell.lat-h.lat,2) + Math.pow(cell.lng-h.lng,2));
+        if (d < MERGE_RADIUS) {
+          // merge: weighted average of center
+          h.totalCount += cell.count;
+          h.lat = (h.lat * h.cellCount + cell.lat) / (h.cellCount + 1);
+          h.lng = (h.lng * h.cellCount + cell.lng) / (h.cellCount + 1);
+          h.cellCount++;
+          Object.keys(cell.acts).forEach(function(id){ h.acts[id]=true; });
+          merged = true; break;
+        }
+      }
+      if (!merged) {
+        hotspots.push({
+          lat: cell.lat, lng: cell.lng,
+          totalCount: cell.count, cellCount: 1,
+          acts: Object.assign({}, cell.acts)
+        });
+      }
+    });
+
+    // score = unique activities that passed through
+    hotspots.forEach(function(h) {
+      h.actCount = Object.keys(h.acts).length;
+    });
+
+    return hotspots.sort(function(a,b){ return b.actCount-a.actCount; }).slice(0,10);
+  }
+
+  async function renderHotspots() {
+    var list = document.getElementById('hotspots-list');
+    list.innerHTML = '<div style="font-size:0.58rem;color:var(--muted);letter-spacing:0.1em;">computing...</div>';
+
+    var hotspots = computeHotspots();
+    if (!hotspots.length) { list.innerHTML='<div style="font-size:0.6rem;color:var(--muted);">not enough data</div>'; return; }
+
+    var maxActs = hotspots[0].actCount;
+
+    // reverse geocode top 10 in parallel
+    await Promise.all(hotspots.map(async function(h, i) {
+      try {
+        var res = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+h.lat+'&lon='+h.lng+'&zoom=16');
+        var d = await res.json();
+        h.name = d.address.road || d.address.pedestrian || d.address.path || d.address.neighbourhood || d.address.suburb || d.address.city || 'Unknown area';
+        h.area = d.address.neighbourhood || d.address.suburb || d.address.city || '';
+      } catch(e) { h.name='Area '+(i+1); h.area=''; }
+    }));
+
+    list.innerHTML = '';
+    hotspots.forEach(function(h, i) {
+      var barPct = (h.actCount / maxActs * 100).toFixed(1);
+      var item = document.createElement('div');
+      item.style.cssText = 'border:1px solid var(--border);background:var(--surface);padding:12px 16px;cursor:pointer;transition:background 0.15s;';
+      item.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+          '<div>' +
+            '<span style="font-family:\'Cormorant\',serif;font-style:italic;font-size:1rem;color:var(--text);">'+(i+1)+'. '+h.name+'</span>' +
+            (h.area ? '<span style="font-size:0.54rem;color:var(--muted);margin-left:8px;letter-spacing:0.06em;">'+h.area+'</span>' : '') +
+          '</div>' +
+          '<span style="font-size:0.62rem;color:var(--accent);letter-spacing:0.06em;">'+h.actCount+' activities</span>' +
+        '</div>' +
+        '<div style="height:1px;background:var(--border);margin-bottom:0;">' +
+          '<div style="height:100%;width:'+barPct+'%;background:var(--accent2);transition:width 0.6s cubic-bezier(0.16,1,0.3,1);"></div>' +
+        '</div>';
+
+      // click → go to map and zoom to this spot
+      item.addEventListener('mouseenter', function(){ this.style.background='rgba(255,255,255,0.02)'; });
+      item.addEventListener('mouseleave', function(){ this.style.background='var(--surface)'; });
+      item.addEventListener('click', function(){
+        goToMapTab();
+        setTimeout(function(){
+          var pad = 0.008;
+          map.fitBounds([[h.lat-pad, h.lng-pad],[h.lat+pad, h.lng+pad]]);
+        }, 100);
+      });
+
+      list.appendChild(item);
+    });
+  }
+
+  // ── stats header ─────────────────────────────────────────
+  function updateStats(){
+    var vis=getVisible();
+    document.getElementById('stat-runs').textContent  = vis.filter(function(x){return x.type==='run';}).length;
+    document.getElementById('stat-rides').textContent = vis.filter(function(x){return x.type==='ride';}).length;
+    document.getElementById('stat-km').textContent    = (vis.reduce(function(s,x){return s+x.act.distance;},0)/1000).toFixed(0);
+  }
+
+  // ── build sidebar tree ───────────────────────────────────
+  async function buildTree(){
+    var tree=document.getElementById('activity-tree');
+    tree.innerHTML='<div style="padding:10px 15px;font-size:0.54rem;color:var(--muted);letter-spacing:0.1em">detecting cities...</div>';
+    // reuse already-geocoded cities from renderAll if available, else cluster fresh
+    if(!cities.length) cities=clusterActivities(activities);
+    // only geocode cities that don't have a name yet, with timeout protection
+    await Promise.all(cities.filter(function(cl){return !cl.name;}).map(async function(cl){
+      try{
+        var controller=new AbortController();
+        var tid=setTimeout(function(){controller.abort();},3000);
+        var r=await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+cl.lat+'&lon='+cl.lng+'&zoom=10',{signal:controller.signal});
+        clearTimeout(tid);
+        var d=await r.json();
+        cl.name=d.address.city||d.address.town||d.address.state||'Unknown';
+      }catch(e){cl.name=cl.name||'City '+(cities.indexOf(cl)+1);}
+    }));
+    activities.forEach(function(item){item.visible=true;});
+    tree.innerHTML='';
+
+    var allCities=[{name:'all activities',items:activities,isAll:true}].concat(cities);
+    allCities.forEach(function(cl){
+      var runs=cl.items.filter(function(x){return x.type==='run';});
+      var rides=cl.items.filter(function(x){return x.type==='ride';});
+      if(!runs.length&&!rides.length) return;
+
+      var cityDiv=document.createElement('div'); cityDiv.className='tree-city open';
+      var header=document.createElement('div'); header.className='tree-city-header';
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='tree-city-cb'; cb.checked=true;
+      var chev=document.createElement('span'); chev.className='tree-chevron'; chev.textContent='▶';
+      var nm=document.createElement('span'); nm.className='tree-city-name'; nm.textContent=cl.name;
+      var cnt=document.createElement('span'); cnt.className='tree-city-count'; cnt.textContent=cl.items.length;
+
+      // fit + go-to-map buttons (only for real cities, not "all activities")
+      if (!cl.isAll) {
+        var fitBtn=document.createElement('button');
+        fitBtn.className='tree-fit-btn'; fitBtn.dataset.city=cl.name;
+        fitBtn.textContent=cityFits[cl.name]?'✓ fit set':'set fit';
+        if(cityFits[cl.name]) fitBtn.classList.add('has-fit');
+        fitBtn.title='Draw a line on the map to define bounds for this city';
+        fitBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          goToMapTab();
+          setTimeout(function(){ startFitDraw(cl.name); }, 100);
+        });
+
+        var goBtn=document.createElement('button');
+        goBtn.className='tree-go-map-btn'; goBtn.textContent='→';
+        goBtn.title='Go to map and fit this city';
+        goBtn.addEventListener('click',function(e){
+          e.stopPropagation();
+          goToMapTab();
+          setTimeout(function(){
+            if(cityFits[cl.name]){
+              applyFit(cl.name);
+            } else {
+              var pts=[];cl.items.forEach(function(x){pts=pts.concat(x.pts);});
+              if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});
+            }
+          },100);
+        });
+
+        header.appendChild(cb); header.appendChild(chev); header.appendChild(nm); header.appendChild(cnt);
+        header.appendChild(fitBtn); header.appendChild(goBtn);
+      } else {
+        header.appendChild(cb); header.appendChild(chev); header.appendChild(nm); header.appendChild(cnt);
+      }
+
+      var typesDiv=document.createElement('div'); typesDiv.className='tree-types';
+      var typeCbs={};
+
+      function makeRow(type,items,label){
+        if(!items.length) return;
+        var row=document.createElement('div'); row.className='tree-type-row';
+        var dot=document.createElement('span'); dot.className='tree-type-dot'; dot.style.background=type==='ride'?RIDE_COLOR:RUN_COLOR;
+        var lbl=document.createElement('span'); lbl.className='tree-type-label '+type; lbl.textContent=label;
+        var ct=document.createElement('span'); ct.className='tree-type-count'; ct.textContent=items.length;
+        var tcb=document.createElement('input'); tcb.type='checkbox'; tcb.className='tree-type-cb '+type; tcb.checked=true;
+        typeCbs[type]=tcb;
+        tcb.addEventListener('change',function(e){e.stopPropagation();items.forEach(function(x){x.visible=tcb.checked;});syncCb(cb,typeCbs);renderLines();updateStats();});
+        row.addEventListener('click',function(e){if(e.target!==tcb)tcb.click();var pts=[];items.forEach(function(x){pts=pts.concat(x.pts);});if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});});
+        row.appendChild(dot);row.appendChild(lbl);row.appendChild(ct);row.appendChild(tcb);typesDiv.appendChild(row);
+      }
+      makeRow('run',runs,'runs');
+      makeRow('ride',rides,'rides');
+
+      cb.addEventListener('change',function(e){e.stopPropagation();cl.items.forEach(function(x){x.visible=cb.checked;});Object.values(typeCbs).forEach(function(t){t.checked=cb.checked;});renderLines();updateStats();});
+      // auto-zoom to city when checking it
+      cb.addEventListener('change',function(e){
+        if(cb.checked){var pts=[];cl.items.forEach(function(x){pts=pts.concat(x.pts);});if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});}
+      });
+      header.addEventListener('click',function(e){if(e.target===cb)return;cityDiv.classList.toggle('open');var pts=[];cl.items.filter(function(x){return x.visible;}).forEach(function(x){pts=pts.concat(x.pts);});if(!pts.length)cl.items.forEach(function(x){pts=pts.concat(x.pts);});if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});});
+      cityDiv.appendChild(header);cityDiv.appendChild(typesDiv);tree.appendChild(cityDiv);
+    });
+
+    if(cities.length>0){var pts=[];cities[0].items.forEach(function(x){pts=pts.concat(x.pts);});if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});}
+  }
+
+  function syncCb(cb,typeCbs){var v=Object.values(typeCbs).map(function(t){return t.checked;});if(v.every(Boolean)){cb.checked=true;cb.indeterminate=false;}else if(v.some(Boolean)){cb.indeterminate=true;cb.checked=false;}else{cb.checked=false;cb.indeterminate=false;}}
+
+  // ── main render ──────────────────────────────────────────
+  async function renderAll(rawActs){
+    activities=[];
+    // decode & simplify all first (fast, no DOM)
+    var decoded=[];
+    rawActs.forEach(function(act){
+      try {
+        if(!act||!act.map||!act.map.summary_polyline) return;
+        var pts=decodePoly(act.map.summary_polyline);
+        if(!pts.length)return;
+        pts=dpSimplify(pts,0.00003);
+        var ls=0,gs=0;pts.forEach(function(p){ls+=p[0];gs+=p[1];});
+        decoded.push({act:act,pts:pts,center:[ls/pts.length,gs/pts.length],type:getType(act),visible:true,color:null,line:null});
+      } catch(e){ console.warn('Skipping bad activity:', e); }
+    });
+
+    // cluster cities first so we can auto-zoom immediately
+    activities=decoded;
+    cities=clusterActivities(activities);
+    // give cities placeholder names immediately
+    cities.forEach(function(cl,i){cl.name=''; }); // clear so buildTree geocodes them
+
+    // show UI instantly — no map rendering yet
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('sidebar').classList.add('visible');
+    document.getElementById('toggle-btn').classList.add('open');
+    document.getElementById('loading-screen').classList.remove('visible');
+    mapRendered = false;
+    updateStats();
+    renderSummary();
+    renderLastActivities();
+    await buildTree();
+    if(document.getElementById('view-share').classList.contains('active')) initShare();
+    // safety: ensure loading screen is gone
+    document.getElementById('loading-screen').classList.remove('visible');
+  }
+
+  function initMapRender(){
+    if(mapRendered) return;
+    mapRendered = true;
+    lineLayer.clearLayers();
+    // reset line refs
+    activities.forEach(function(item){item.line=null;item.lines=null;});
+    var BATCH=3;
+    function renderBatch(i){
+      if(i>=cities.length) return;
+      for(var j=i;j<Math.min(i+BATCH,cities.length);j++) renderCityLines(cities[j]);
+      setTimeout(function(){renderBatch(i+BATCH);},16);
+    }
+    // zoom to biggest city
+    if(cities.length>0){
+      var pts=[];cities[0].items.forEach(function(x){pts=pts.concat(x.pts);});
+      if(pts.length) map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});
+    }
+    renderBatch(0);
+  }
+
+  // render only routes for a specific city cluster
+  function renderCityLines(cl){
+    cl.items.forEach(function(item){
+      if(item.line) return; // already drawn
+      var totalKm=item.act.distance/1000;
+      var needsGrad=(item.type==='run'&&totalKm>=12)||(item.type==='ride'&&totalKm>=30);
+      if(needsGrad && colorMode==='type'){
+        item.color=distanceColor(item.type,totalKm,0);
+        item.lines=drawGradientPolyline(item.pts,item.type,totalKm);
+        item.line=item.lines[0];
+      } else {
+        var c=colorFor(item,activities.indexOf(item));
+        item.color=c;
+        item.line=L.polyline(smoothPts(item.pts),{color:c,weight:1.5,opacity:0.75,smoothFactor:0,lineJoin:'round',lineCap:'round',renderer:canvasRenderer}).addTo(lineLayer);
+      }
+    });
+  }
+
+  // async geocode cities (non-blocking)
+  async function geocitiesAsync(){
+    if(!cities.length) return;
+    // reverse geocode top 5 cities in parallel, rest can wait
+    var top=cities.slice(0,Math.min(5,cities.length));
+    await Promise.all(top.map(async function(cl){
+      if(cl.name && cl.name!=='...') return;
+      try{
+        var controller=new AbortController();
+        var tid=setTimeout(function(){controller.abort();},3000);
+        var r=await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+cl.lat+'&lon='+cl.lng+'&zoom=10',{signal:controller.signal});
+        clearTimeout(tid);
+        var d=await r.json();
+        cl.name=d.address.city||d.address.town||d.address.state||'Unknown';
+      }catch(e){cl.name=cl.name||'City '+(cities.indexOf(cl)+1);}
+    }));
+    // remaining cities in background
+    cities.slice(5).forEach(async function(cl){
+      if(cl.name && cl.name!=='...') return;
+      try{
+        var controller=new AbortController();
+        var tid=setTimeout(function(){controller.abort();},3000);
+        var r=await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+cl.lat+'&lon='+cl.lng+'&zoom=10',{signal:controller.signal});
+        clearTimeout(tid);
+        var d=await r.json();
+        cl.name=d.address.city||d.address.town||d.address.state||'Unknown';
+      }catch(e){cl.name=cl.name||'City '+(cities.indexOf(cl)+1);}
+    });
+  }
+
+  // ── controls ─────────────────────────────────────────────
+  document.getElementById('zoom-in').addEventListener('click',function(){map.zoomIn();});
+  document.getElementById('zoom-out').addEventListener('click',function(){map.zoomOut();});
+  document.getElementById('zoom-fit').addEventListener('click',function(){var pts=[];getVisible().forEach(function(x){pts=pts.concat(x.pts);});if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});});
+  document.getElementById('toggle-basemap').addEventListener('change',function(){if(this.checked)map.addLayer(baseTile);else map.removeLayer(baseTile);});
+  document.getElementById('toggle-density').addEventListener('change',function(){densityMode=this.checked;if(activities.length)renderLines();});
+  document.querySelectorAll('.color-mode-btn').forEach(function(btn){btn.addEventListener('click',function(){document.querySelectorAll('.color-mode-btn').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');colorMode=btn.dataset.mode;document.getElementById('custom-color-row').style.display=colorMode==='single'?'flex':'none';if(activities.length)renderLines();});});
+  document.getElementById('custom-color').addEventListener('input',function(){customColor=this.value;if(colorMode==='single'&&activities.length)renderLines();});
+  document.getElementById('toggle-btn').addEventListener('click',function(){document.getElementById('sidebar').classList.toggle('visible');this.classList.toggle('open');});
+
+  // ── strava ───────────────────────────────────────────────
+  function getToken(){return localStorage.getItem('strava_token');}
+  function saveToken(t){localStorage.setItem('strava_token',t);}
+  function clearToken(){localStorage.removeItem('strava_token');}
+
+  document.getElementById('strava-auth-btn') && document.getElementById('strava-auth-btn').addEventListener('click',function(e){e.preventDefault();doStravaAuth();});
+
+  async function exchangeCode(code){var res=await fetch('https://www.strava.com/oauth/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:CLIENT_ID,client_secret:CLIENT_SECRET,code:code,grant_type:'authorization_code'})});return res.json();}
+
+  // ── activity cache ───────────────────────────────────────────
+  var CACHE_KEY = 'runmap_activities_v2';
+  function saveCache(acts){try{localStorage.setItem(CACHE_KEY,JSON.stringify(acts));}catch(e){try{localStorage.setItem(CACHE_KEY,JSON.stringify(acts.slice(0,Math.floor(acts.length/2))));}catch(e2){}}}
+  function loadCache(){try{var r=localStorage.getItem(CACHE_KEY);return r?JSON.parse(r):null;}catch(e){return null;}}
+  function clearCache(){localStorage.removeItem(CACHE_KEY);}
+  function isValidActivity(a){var t=(a.sport_type||a.type||'').toLowerCase();return(t==='run'||t==='ride'||t==='cycling')&&a.map&&a.map.summary_polyline;}
+
+  async function fetchActivities(token){
+    var all=[],page=1;
+    while(true){
+      var res=await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=100&page='+page,{headers:{'Authorization':'Bearer '+token}});
+      var data=await res.json();
+      if(!Array.isArray(data)||!data.length)break;
+      all=all.concat(data.filter(isValidActivity));
+      if(data.length<100)break;page++;
+    }
+    return all;
+  }
+
+  async function fetchNewSince(token,afterTs){
+    var all=[],page=1;
+    while(true){
+      var res=await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=100&page='+page+'&after='+afterTs,{headers:{'Authorization':'Bearer '+token}});
+      var data=await res.json();
+      if(!Array.isArray(data)||!data.length)break;
+      all=all.concat(data.filter(isValidActivity));
+      if(data.length<100)break;page++;
+    }
+    return all;
+  }
+
+  function setProgress(pct,label){document.getElementById('progress-bar').style.width=pct+'%';document.getElementById('loading-sub').textContent=label;}
+  document.getElementById('disconnect-btn').addEventListener('click',function(){clearToken();clearCache();window.location.href=REDIRECT_URI;});
+
+  document.getElementById('sync-btn').addEventListener('click', async function(){
+    var token=getToken(); if(!token) return;
+    var btn=this; btn.textContent='↻ syncing…'; btn.style.color='var(--accent)';
+    try{
+      var cached=loadCache();
+      if(cached&&cached.length>0){
+        var latestTs=Math.max.apply(null,cached.map(function(a){return Math.floor(new Date(a.start_date).getTime()/1000);}));
+        setProgress(20,'checking for new activities...');
+        var newActs=await fetchNewSince(token,latestTs);
+        if(newActs.length>0){var merged=newActs.concat(cached);saveCache(merged);document.getElementById('loading-screen').classList.add('visible');setProgress(85,'drawing routes...');await renderAll(merged);document.getElementById('loading-screen').classList.remove('visible');}
+        btn.textContent='↻ sync'; btn.style.color='';
+      }else{
+        document.getElementById('loading-screen').classList.add('visible');
+        setProgress(20,'fetching activities...');
+        var acts=await fetchActivities(token);saveCache(acts);setProgress(85,'drawing routes...');await renderAll(acts);
+        document.getElementById('loading-screen').classList.remove('visible');
+        btn.textContent='↻ sync'; btn.style.color='';
+      }
+    }catch(e){btn.textContent='↻ sync';btn.style.color='';console.error(e);}
+  });
+
+  // ── share tab ─────────────────────────────────────────────
+  var shareFmt='square', sharePhoto=null, shareCity='all';
+  var shareDims={square:[1080,1080],portrait:[1080,1350],story:[1080,1920]};
+  var summaryPos='br';
+  var shareBg='dark';
+  var shareBorder='none';
+  var shareRouteScale=0.84;
+
+
+  function setShareBg(val){
+    shareBg=val;
+    document.getElementById('bg-dark-btn').classList.toggle('active', val==='dark');
+    document.getElementById('bg-light-btn').classList.toggle('active', val==='light');
+    renderSharePreview();
+  }
+  function setShareBorder(val){
+    shareBorder=val;
+    ['none','white','black'].forEach(function(b){ document.getElementById('border-'+b+'-btn').classList.toggle('active', val===b); });
+    renderSharePreview();
+  } // tl tc tr ml mc mr bl bc br
+
+  // position picker
+  document.querySelectorAll('.pos-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.pos-btn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      summaryPos=btn.dataset.pos;
+      renderSharePreview();
+    });
+  });
+  // init: make br the only active
+  document.querySelectorAll('.pos-btn').forEach(function(b){b.classList.remove('active');});
+  document.querySelector('[data-pos="br"]').classList.add('active');
+
+  document.getElementById('share-summary').addEventListener('change',function(){
+    document.getElementById('summary-pos-row').style.display=this.checked?'flex':'none';
+    renderSharePreview();
+  });
+
+  function initShare(){
+    var sel=document.getElementById('share-city-select');
+    sel.innerHTML='<option value="all">all activities</option>';
+    cities.forEach(function(cl,i){var o=document.createElement('option');o.value=i;o.textContent=cl.name;sel.appendChild(o);});
+    renderSharePreview();
+  }
+
+  function getShareItems(){
+    if(shareCity==='all') return activities;
+    var idx=parseInt(shareCity);
+    return(cities[idx]?cities[idx].items:activities);
+  }
+
+  function renderSharePreview(){
+    var canvas=document.getElementById('share-canvas');
+    var dim=shareDims[shareFmt]; var W=dim[0],H=dim[1];
+    canvas.width=W; canvas.height=H;
+    drawShareCanvas(canvas.getContext('2d'),W,H,false);
+    document.getElementById('preview-label').textContent=W+' × '+H+' px';
+  }
+
+  function drawShareCanvas(ctx,W,H,transparent){
+    ctx.clearRect(0,0,W,H);
+    var isDark = shareBg==='dark';
+    var bgColor = isDark ? '#0a0a0f' : '#f5f4f0';
+    var routeColor = isDark ? 'rgba(255,255,255,0.82)' : 'rgba(10,10,15,0.75)';
+    var textColor  = isDark ? 'rgba(255,255,255,0.9)'  : 'rgba(10,10,15,0.85)';
+    var textMuted  = isDark ? 'rgba(255,255,255,0.38)' : 'rgba(10,10,15,0.3)';
+    var shadowCol  = isDark ? 'rgba(0,0,0,0.8)'        : 'rgba(255,255,255,0.8)';
+
+    if(!transparent){
+      if(sharePhoto){
+        var iw=sharePhoto.naturalWidth,ih=sharePhoto.naturalHeight,scale=Math.max(W/iw,H/ih);
+        var sw=iw*scale,sh=ih*scale,ox=(W-sw)/2,oy=(H-sh)/2;
+        ctx.drawImage(sharePhoto,ox,oy,sw,sh);
+        if(document.getElementById('share-overlay').checked){ctx.fillStyle='rgba(10,10,15,0.55)';ctx.fillRect(0,0,W,H);}
+        routeColor='rgba(255,255,255,0.82)';
+        textColor='rgba(255,255,255,0.9)'; textMuted='rgba(255,255,255,0.38)';
+      } else {
+        ctx.fillStyle=bgColor; ctx.fillRect(0,0,W,H);
+      }
+    }
+
+    var items=getShareItems(); if(!items.length) return;
+
+    // bounds
+    var pMinLat,pMaxLat,pMinLng,pMaxLng;
+    var cityKey = shareCity==='all' ? null : (cities[parseInt(shareCity)]?cities[parseInt(shareCity)].name:null);
+    if(cityKey && cityFits[cityKey]) {
+      var fit=cityFits[cityKey];
+      var latR=fit.maxLat-fit.minLat||0.01, lngR=fit.maxLng-fit.minLng||0.01;
+      var canAsp=W/H, mapAsp=lngR/latR, effLng, effLat;
+      var fitExpand = 1/shareRouteScale;
+      if(mapAsp>canAsp){effLng=lngR*fitExpand;effLat=effLng/canAsp;}else{effLat=latR*fitExpand;effLng=effLat*canAsp;}
+      var cLat=(fit.maxLat+fit.minLat)/2,cLng=(fit.maxLng+fit.minLng)/2;
+      pMinLat=cLat-effLat/2; pMaxLat=cLat+effLat/2;
+      pMinLng=cLng-effLng/2; pMaxLng=cLng+effLng/2;
+    } else {
+      var minLat=Infinity,maxLat=-Infinity,minLng=Infinity,maxLng=-Infinity;
+      items.forEach(function(item){item.pts.forEach(function(p){if(p[0]<minLat)minLat=p[0];if(p[0]>maxLat)maxLat=p[0];if(p[1]<minLng)minLng=p[1];if(p[1]>maxLng)maxLng=p[1];});});
+      var latR=maxLat-minLat||0.01,lngR=maxLng-minLng||0.01;
+      var mapAsp=lngR/latR,canAsp=W/H,effLng,effLat;
+      // apply route scale always (even without city fit)
+      var expand = 1/shareRouteScale;
+      if(mapAsp>canAsp){effLng=lngR*1.08*expand;effLat=effLng/canAsp;}else{effLat=latR*1.08*expand;effLng=effLat*canAsp;}
+      var cLat=(maxLat+minLat)/2,cLng=(maxLng+minLng)/2;
+      pMinLat=cLat-effLat/2; pMaxLat=cLat+effLat/2;
+      pMinLng=cLng-effLng/2; pMaxLng=cLng+effLng/2;
+    }
+
+    function xy(lat,lng){return[(lng-pMinLng)/(pMaxLng-pMinLng)*W,(1-(lat-pMinLat)/(pMaxLat-pMinLat))*H];}
+    var lw=Math.max(1.2,W/500);
+
+    // route color: always derived from theme (dark→white routes, light→black routes)
+    var finalRouteColor = transparent ? 'rgba(255,255,255,0.9)' : routeColor;
+    // if photo, routes stay white regardless of theme
+    if (!transparent && sharePhoto) finalRouteColor = 'rgba(255,255,255,0.85)';
+
+    items.forEach(function(item){
+      if(!item.pts.length) return;
+      var totalKm=item.act.distance/1000;
+      var needsGrad = !transparent && colorMode==='type' &&
+        ((item.type==='run'&&totalKm>=12)||(item.type==='ride'&&totalKm>=30));
+      if(needsGrad){
+        var sPts=chaikin(item.pts,2);
+        drawGradientOnCtx(ctx, sPts, xy, item.type, totalKm, lw, 1.0, null);
+      } else {
+        ctx.beginPath();
+        ctx.strokeStyle = finalRouteColor;
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth=lw; ctx.lineJoin='round'; ctx.lineCap='round';
+        var first=true;
+        item.pts.forEach(function(p){var c=xy(p[0],p[1]);if(first){ctx.moveTo(c[0],c[1]);first=false;}else ctx.lineTo(c[0],c[1]);});
+        ctx.stroke();
+      }
+    });
+    ctx.globalAlpha=1.0;
+
+    // ── compute border inset so logo and summary stay inside ──
+    var bw = (!transparent && shareBorder!=='none') ? Math.round(W*0.018) : 0;
+    var inset = bw + W*0.035; // padding from edge for overlays
+
+    // ── summary overlay — compact, clear ─────────────────────
+    if(!transparent && document.getElementById('share-summary').checked){
+      var visItems=getShareItems();
+      var runs=visItems.filter(function(x){return x.type==='run';});
+      var rides=visItems.filter(function(x){return x.type==='ride';});
+      var totalKm=(visItems.reduce(function(s,x){return s+x.act.distance;},0)/1000).toFixed(0);
+      var cityLabel = cityKey || 'all activities';
+
+      var fsCity=Math.round(W*0.022);
+      var fsNum=Math.round(W*0.038);
+      var fsTag=Math.round(W*0.013);
+      var col=W*0.18;
+
+      var pos=summaryPos;
+      var anchorX;
+      if(pos[1]==='l') anchorX=inset;
+      else if(pos[1]==='r') anchorX=W-inset;
+      else anchorX=W/2;
+
+      var blockH=fsCity*1.4 + fsNum*1.3 + fsTag*1.6;
+      var anchorY;
+      if(pos[0]==='t') anchorY=inset+fsCity;
+      else if(pos[0]==='b') anchorY=H-inset-blockH+fsCity;
+      else anchorY=(H-blockH)/2+fsCity;
+
+      var tAlign=pos[1]==='l'?'left':pos[1]==='r'?'right':'center';
+      ctx.shadowColor=shadowCol; ctx.shadowBlur=10;
+
+      // city name
+      ctx.textAlign=tAlign;
+      ctx.font='italic 300 '+fsCity+'px Cormorant, serif';
+      ctx.fillStyle=isDark?'rgba(255,255,255,0.5)':'rgba(10,10,15,0.4)';
+      ctx.fillText(cityLabel, anchorX, anchorY);
+
+      // three stat columns: number big, label tiny below
+      var statsY = anchorY + fsNum*1.25;
+      var stats = [
+        {num: runs.length,  tag: 'runs'},
+        {num: rides.length, tag: 'rides'},
+        {num: totalKm+'km', tag: 'distance'}
+      ];
+
+      var totalCols = stats.length;
+      var totalW = col * totalCols;
+      var startX;
+      if(tAlign==='left')  startX = anchorX;
+      else if(tAlign==='right') startX = anchorX - totalW;
+      else startX = anchorX - totalW/2;
+
+      stats.forEach(function(s, i){
+        var sx = startX + i*col + col/2;
+        ctx.textAlign='center';
+        ctx.font='300 '+fsNum+'px DM Mono, monospace';
+        ctx.fillStyle=textColor;
+        ctx.fillText(s.num, sx, statsY);
+        ctx.font='300 '+fsTag+'px DM Mono, monospace';
+        ctx.fillStyle=textMuted;
+        ctx.fillText(s.tag.toUpperCase(), sx, statsY+fsTag*1.5);
+      });
+
+      ctx.shadowBlur=0;
+    }
+
+    // ── logo — inside border ──────────────────────────────────
+    if(!transparent && document.getElementById('share-logo') && document.getElementById('share-logo').checked){
+      drawLogoOnCanvas(ctx, W, H, inset);
+    }
+
+    // ── watermark ─────────────────────────────────────────────
+    if(!transparent&&document.getElementById('share-watermark').checked){
+      var fs=Math.round(W*0.02);
+      ctx.font='italic 300 '+fs+'px Cormorant, serif';
+      ctx.fillStyle=isDark?'rgba(200,240,224,0.4)':'rgba(10,10,15,0.25)';
+      ctx.textAlign='right';
+      ctx.fillText('runmap', W-inset, H-inset+fs*0.3);
+    }
+
+    // ── border — drawn LAST so it covers everything cleanly ───
+    if(!transparent && shareBorder!=='none'){
+      ctx.strokeStyle = shareBorder==='white' ? '#ffffff' : '#000000';
+      ctx.lineWidth = bw*2;
+      ctx.strokeRect(bw, bw, W-bw*2, H-bw*2);
+    }
+  }
+
+  // photo drop/upload
+  var photoDrop=document.getElementById('photo-drop');
+  photoDrop.addEventListener('click',function(){document.getElementById('photo-input').click();});
+  photoDrop.addEventListener('dragover',function(e){e.preventDefault();photoDrop.style.borderColor='rgba(200,240,224,0.3)';});
+  photoDrop.addEventListener('dragleave',function(){photoDrop.style.borderColor='';});
+  photoDrop.addEventListener('drop',function(e){e.preventDefault();photoDrop.style.borderColor='';if(e.dataTransfer.files[0])loadSharePhoto(e.dataTransfer.files[0]);});
+  document.getElementById('photo-input').addEventListener('change',function(){if(this.files[0])loadSharePhoto(this.files[0]);});
+
+  function loadSharePhoto(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        sharePhoto=img;
+        photoDrop.innerHTML='<img src="'+e.target.result+'" style="width:100%;height:180px;object-fit:cover;display:block;pointer-events:none"><input type="file" id="photo-input" accept="image/*" style="display:none">';
+        photoDrop.classList.add('has-photo');
+        document.getElementById('photo-input').addEventListener('change',function(){if(this.files[0])loadSharePhoto(this.files[0]);});
+        renderSharePreview();
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  document.querySelectorAll('.format-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.format-btn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active'); shareFmt=btn.dataset.fmt; renderSharePreview();
+    });
+  });
+  document.getElementById('share-city-select').addEventListener('change',function(){shareCity=this.value;renderSharePreview();});
+  document.getElementById('share-watermark').addEventListener('change',renderSharePreview);
+  document.getElementById('share-overlay').addEventListener('change',renderSharePreview);
+  document.getElementById('share-logo') && document.getElementById('share-logo').addEventListener('change',renderSharePreview);
+
+  document.getElementById('share-route-scale').addEventListener('input',function(){
+    shareRouteScale = parseInt(this.value)/100;
+    document.getElementById('share-scale-val').textContent = this.value+'%';
+    renderSharePreview();
+  });
+
+  // sync button
+  document.getElementById('sync-btn').addEventListener('click', async function(){
+    var token = getToken(); if(!token) return;
+    var btn = this;
+    btn.textContent='↻ syncing…'; btn.style.color='var(--accent)';
+    var acts = await fetchActivities(token);
+    await renderAll(acts);
+    btn.textContent='↻ sync'; btn.style.color='';
+  });
+
+  document.getElementById('dl-composed').addEventListener('click',function(){
+    var c=document.getElementById('share-canvas'),a=document.createElement('a');
+    a.download='runmap-'+shareFmt+'.png'; a.href=c.toDataURL('image/png'); a.click();
+  });
+  document.getElementById('dl-transparent').addEventListener('click',function(){
+    var dim=shareDims[shareFmt],W=dim[0],H=dim[1];
+    var off=document.createElement('canvas'); off.width=W; off.height=H;
+    drawShareCanvas(off.getContext('2d'),W,H,true);
+    var a=document.createElement('a'); a.download='runmap-transparent-'+shareFmt+'.png'; a.href=off.toDataURL('image/png'); a.click();
+  });
+
+  // ── last activities ───────────────────────────────────────
+  function fmtPace(act) {
+    if (!act.moving_time || !act.distance) return '—';
+    var secsPerKm = act.moving_time / (act.distance/1000);
+    var m=Math.floor(secsPerKm/60), s=Math.round(secsPerKm%60);
+    return m+':'+(s<10?'0':'')+s+' /km';
+  }
+  function fmtDuration(secs) {
+    var h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60), s=secs%60;
+    if(h) return h+'h '+m+'m';
+    return m+'m '+(s<10?'0':'')+s+'s';
+  }
+  function drawMiniRoute(canvas, pts, color) {
+    var W=canvas.width, H=canvas.height;
+    var ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#0a0a0f'; ctx.fillRect(0,0,W,H);
+    if(!pts||!pts.length) return;
+    var minLat=Infinity,maxLat=-Infinity,minLng=Infinity,maxLng=-Infinity;
+    pts.forEach(function(p){if(p[0]<minLat)minLat=p[0];if(p[0]>maxLat)maxLat=p[0];if(p[1]<minLng)minLng=p[1];if(p[1]>maxLng)maxLng=p[1];});
+    var latR=maxLat-minLat||0.01, lngR=maxLng-minLng||0.01;
+    var asp=lngR/latR, cAsp=W/H, effLng, effLat;
+    if(asp>cAsp){effLng=lngR*1.2;effLat=effLng/cAsp;}else{effLat=latR*1.2;effLng=effLat*cAsp;}
+    var cLat=(maxLat+minLat)/2, cLng=(maxLng+minLng)/2;
+    var pMinLat=cLat-effLat/2, pMaxLat=cLat+effLat/2, pMinLng=cLng-effLng/2, pMaxLng=cLng+effLng/2;
+    function xy(lat,lng){return[(lng-pMinLng)/(pMaxLng-pMinLng)*W,(1-(lat-pMinLat)/(pMaxLat-pMinLat))*H];}
+    ctx.beginPath();
+    ctx.strokeStyle=color||'rgba(255,255,255,0.8)';
+    ctx.lineWidth=Math.max(1,W/80);
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    var first=true;
+    pts.forEach(function(p){var c=xy(p[0],p[1]);if(first){ctx.moveTo(c[0],c[1]);first=false;}else ctx.lineTo(c[0],c[1]);});
+    ctx.stroke();
+  }
+
+  function renderLastActivities() {
+    var container = document.getElementById('act-cards');
+    container.innerHTML='';
+    var last5 = activities.slice(0,25);
+    last5.forEach(function(item) {
+      var act = item.act;
+      var km = (act.distance/1000).toFixed(2);
+      var date = new Date(act.start_date_local).toLocaleDateString('es-MX',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      var typeColor = item.type==='ride'?RIDE_COLOR:RUN_COLOR;
+
+      var card = document.createElement('div');
+      card.className='act-card';
+      card.innerHTML=
+        '<div class="act-card-body">'+
+          '<div class="act-card-name">'+act.name+'</div>'+
+          '<div class="act-card-meta"><span style="color:'+typeColor+'">'+item.type+'</span> · '+date+'</div>'+
+          '<div class="act-card-stats">'+
+            '<div class="act-stat"><div class="act-stat-val" style="color:'+typeColor+'">'+km+'</div><div class="act-stat-label">km</div></div>'+
+            '<div class="act-stat"><div class="act-stat-val">'+fmtDuration(act.moving_time||0)+'</div><div class="act-stat-label">time</div></div>'+
+            (item.type==='run'?'<div class="act-stat"><div class="act-stat-val">'+fmtPace(act)+'</div><div class="act-stat-label">pace</div></div>':'')+
+          '</div>'+
+          '<div class="act-share-hint">tap to share →</div>'+
+        '</div>'+
+        '<div class="act-card-map"><canvas class="mini-map-canvas" width="120" height="120"></canvas></div>';
+
+      // draw mini route
+      var miniCanvas = card.querySelector('.mini-map-canvas');
+      drawMiniRoute(miniCanvas, item.pts, typeColor);
+
+      card.addEventListener('click', function(){ openActivityModal(item); });
+      container.appendChild(card);
+    });
+  }
+
+  // ── activity modal ────────────────────────────────────────
+  var modalActivity = null;
+  var modalFmt = 'square';
+  var modalPhoto = null;
+  var modalRouteScale = 0.84;
+  var modalRouteOpacity = 0.85;
+  var modalCustomTitle = '';
+
+  function openActivityModal(item) {
+    modalActivity = item;
+    modalPhoto = null;
+    modalRouteScale = 0.84;
+    modalRouteOpacity = 0.85;
+    modalCustomTitle = item.act.name;
+    var act = item.act;
+    var typeColor = item.type==='ride'?RIDE_COLOR:RUN_COLOR;
+    var km = (act.distance/1000).toFixed(2);
+    var date = new Date(act.start_date_local).toLocaleDateString('es-MX',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+    document.getElementById('modal-title-input').value = act.name;
+    document.getElementById('modal-meta').textContent = item.type+' · '+date;
+    document.getElementById('modal-route-scale').value = 84;
+    document.getElementById('modal-scale-val').textContent = '84%';
+    document.getElementById('modal-route-opacity').value = 85;
+    document.getElementById('modal-opacity-val').textContent = '85%';
+
+    // reset photo drop
+    var drop = document.getElementById('modal-photo-drop');
+    drop.textContent = 'drop photo or click';
+    drop.style.background = '';
+
+    // metrics
+    var metrics = [
+      {val:km+' km', label:'distance', color:typeColor},
+      {val:fmtDuration(act.moving_time||0), label:'time', color:''},
+      {val:item.type==='run'?fmtPace(act):'—', label:'pace', color:''},
+    ];
+    document.getElementById('modal-metrics').innerHTML = metrics.map(function(m){
+      return '<div class="act-metric"><div class="act-metric-val" style="color:'+(m.color||'var(--text)')+'">'+m.val+'</div><div class="act-metric-label">'+m.label+'</div></div>';
+    }).join('');
+
+    // draw large route preview
+    var mc = document.getElementById('modal-map-canvas');
+    mc.width=600; mc.height=300;
+    drawMiniRoute(mc, item.pts, typeColor);
+
+    // reset format buttons
+    document.querySelectorAll('#modal-fmt-btns .format-btn').forEach(function(b){b.classList.remove('active');});
+    document.querySelector('#modal-fmt-btns [data-fmt="square"]').classList.add('active');
+    modalFmt = 'square';
+
+    // reset to image mode
+    document.getElementById('modal-mode-image').classList.add('active');
+    document.getElementById('modal-mode-video').classList.remove('active');
+    document.getElementById('modal-image-panel').style.display='';
+    document.getElementById('modal-video-panel').style.display='none';
+    stopModalVid();
+    document.getElementById('act-modal').classList.add('open');
+    renderModalShare();
+  }
+
+  function renderModalShare() {
+    if(!modalActivity) return;
+    var dim = shareDims[modalFmt];
+    var W=dim[0], H=dim[1];
+    var canvas = document.getElementById('modal-share-canvas');
+    canvas.width=W; canvas.height=H;
+    var ctx = canvas.getContext('2d');
+    var item = modalActivity;
+    var act = item.act;
+
+    // background — photo or dark
+    if (modalPhoto) {
+      var iw=modalPhoto.naturalWidth,ih=modalPhoto.naturalHeight,scale=Math.max(W/iw,H/ih);
+      var sw=iw*scale,sh=ih*scale,ox=(W-sw)/2,oy=(H-sh)/2;
+      ctx.drawImage(modalPhoto,ox,oy,sw,sh);
+      ctx.fillStyle='rgba(10,10,15,0.5)'; ctx.fillRect(0,0,W,H);
+    } else {
+      ctx.fillStyle='#0a0a0f'; ctx.fillRect(0,0,W,H);
+    }
+
+    // route — scaled + opacity controlled
+    var scale = modalRouteScale;
+    var opacity = modalRouteOpacity;
+    var lw = Math.max(1.5, W/400);
+    drawMiniRouteCtxScaled(ctx, item.pts, 'rgba(255,255,255,'+opacity+')', W, H, lw, scale);
+
+    // overlay text
+    var pad=W*0.07;
+    var fs1=Math.round(W*0.055);
+    var fs2=Math.round(W*0.032);
+    var fs3=Math.round(W*0.018);
+    var bottomY = H - pad;
+    var titleText = modalCustomTitle || act.name;
+
+    ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=12;
+
+    ctx.font='italic 300 '+fs1+'px Cormorant, serif';
+    ctx.fillStyle='rgba(255,255,255,0.95)';
+    ctx.textAlign='left';
+    ctx.fillText(titleText, pad, bottomY - fs2*2.8 - fs3*3);
+
+    var km=(act.distance/1000).toFixed(2);
+    var statsLine = km+' km  ·  '+fmtDuration(act.moving_time||0)+(item.type==='run'?'  ·  '+fmtPace(act):'');
+    ctx.font='300 '+fs2+'px DM Mono, monospace';
+    ctx.fillStyle='rgba(255,255,255,0.75)';
+    ctx.fillText(statsLine, pad, bottomY - fs3*3);
+
+    var date=new Date(act.start_date_local).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    ctx.font='300 '+fs3+'px DM Mono, monospace';
+    ctx.fillStyle='rgba(255,255,255,0.35)';
+    ctx.fillText(date, pad, bottomY - fs3*0.5);
+
+    ctx.shadowBlur=0;
+
+    // logo — bottom right, SVG-style drawn on canvas
+    drawLogoOnCanvas(ctx, W, H, pad);
+  }
+
+  function drawLogoOnCanvas(ctx, W, H, pad) {
+    var s = W * 0.06; // logo size
+    var cx = W - pad - s*0.5;
+    var cy = H - pad - s*0.5;
+    var r = s * 0.48;
+
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+
+    // outer ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = '#8be8c8';
+    ctx.lineWidth = r * 0.04;
+    ctx.stroke();
+
+    // spiral route path
+    ctx.beginPath();
+    ctx.strokeStyle = '#8be8c8';
+    ctx.lineWidth = r * 0.07;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    var sc = r / 11; // scale from logo coords (center ~0,0, radius ~11)
+    function lp(x,y){ return [cx + x*sc, cy + y*sc]; }
+    var c = lp(-7,7);
+    ctx.moveTo(c[0],c[1]);
+    var cp1=lp(-11,5), cp2=lp(-12,0), p2=lp(-10,-3); ctx.bezierCurveTo(cp1[0],cp1[1],cp2[0],cp2[1],p2[0],p2[1]);
+    var cp3=lp(-8,-7), cp4=lp(-3,-10), p3=lp(3,-9); ctx.bezierCurveTo(cp3[0],cp3[1],cp4[0],cp4[1],p3[0],p3[1]);
+    var cp5=lp(8,-7), cp6=lp(11,-1), p4=lp(10,4); ctx.bezierCurveTo(cp5[0],cp5[1],cp6[0],cp6[1],p4[0],p4[1]);
+    var cp7=lp(9,9), cp8=lp(4,11), p5=lp(-1,10); ctx.bezierCurveTo(cp7[0],cp7[1],cp8[0],cp8[1],p5[0],p5[1]);
+    var cp9=lp(-6,9), cp10=lp(-8,5), p6=lp(-7,1); ctx.bezierCurveTo(cp9[0],cp9[1],cp10[0],cp10[1],p6[0],p6[1]);
+    var cp11=lp(-5,-3), cp12=lp(-1,-5), p7=lp(3,-3); ctx.bezierCurveTo(cp11[0],cp11[1],cp12[0],cp12[1],p7[0],p7[1]);
+    var cp13=lp(6,-1), cp14=lp(6,3), p8=lp(3,4); ctx.bezierCurveTo(cp13[0],cp13[1],cp14[0],cp14[1],p8[0],p8[1]);
+    ctx.stroke();
+
+    // end dot
+    var endP = lp(3,4);
+    ctx.beginPath();
+    ctx.arc(endP[0], endP[1], r*0.08, 0, Math.PI*2);
+    ctx.fillStyle = '#c8f0e0';
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawMiniRouteCtxScaled(ctx, pts, color, W, H, lw, scaleFactor) {
+    if(!pts||!pts.length) return;
+    var minLat=Infinity,maxLat=-Infinity,minLng=Infinity,maxLng=-Infinity;
+    pts.forEach(function(p){if(p[0]<minLat)minLat=p[0];if(p[0]>maxLat)maxLat=p[0];if(p[1]<minLng)minLng=p[1];if(p[1]>maxLng)maxLng=p[1];});
+    var latR=maxLat-minLat||0.01,lngR=maxLng-minLng||0.01;
+    var asp=lngR/latR,cAsp=W/H,effLng,effLat;
+    // expand bounds inverse to scale so route appears smaller/larger
+    var expand = 1 / scaleFactor;
+    if(asp>cAsp){effLng=lngR*1.16*expand;effLat=effLng/cAsp;}else{effLat=latR*1.16*expand;effLng=effLat*cAsp;}
+    var cLat=(maxLat+minLat)/2,cLng=(maxLng+minLng)/2;
+    var pMinLat=cLat-effLat/2,pMaxLat=cLat+effLat/2,pMinLng=cLng-effLng/2,pMaxLng=cLng+effLng/2;
+    function xy(lat,lng){return[(lng-pMinLng)/(pMaxLng-pMinLng)*W,(1-(lat-pMinLat)/(pMaxLat-pMinLat))*H];}
+    var sPts = chaikin(pts,2);
+    ctx.beginPath();
+    ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.lineJoin='round'; ctx.lineCap='round';
+    var first=true;
+    sPts.forEach(function(p){var c=xy(p[0],p[1]);if(first){ctx.moveTo(c[0],c[1]);first=false;}else ctx.lineTo(c[0],c[1]);});
+    ctx.stroke();
+  }
+
+  // modal controls
+  // modal mode switcher
+  document.getElementById('modal-mode-image').addEventListener('click',function(){
+    document.getElementById('modal-mode-image').classList.add('active');
+    document.getElementById('modal-mode-video').classList.remove('active');
+    document.getElementById('modal-image-panel').style.display='';
+    document.getElementById('modal-video-panel').style.display='none';
+    stopModalVid();
+  });
+  document.getElementById('modal-mode-video').addEventListener('click',function(){
+    document.getElementById('modal-mode-video').classList.add('active');
+    document.getElementById('modal-mode-image').classList.remove('active');
+    document.getElementById('modal-image-panel').style.display='none';
+    document.getElementById('modal-video-panel').style.display='';
+    initModalVideo();
+  });
+
+  // modal video state
+  var modalVidFrame=null, modalVidRecorder=null;
+
+  function stopModalVid(){
+    if(modalVidFrame){cancelAnimationFrame(modalVidFrame);modalVidFrame=null;}
+    if(modalVidRecorder&&modalVidRecorder.state!=='inactive'){modalVidRecorder.stop();modalVidRecorder=null;}
+  }
+
+  function initModalVideo(){
+    if(!modalActivity) return;
+    var c=document.getElementById('modal-vid-canvas');
+    c.width=600; c.height=600;
+    var ctx=c.getContext('2d');
+    ctx.fillStyle='#0a0a0f'; ctx.fillRect(0,0,600,600);
+    // draw full route faintly as preview
+    var pts=chaikin(modalActivity.pts,2);
+    drawMiniRouteCtx(c, modalActivity.pts, 'rgba(255,255,255,0.2)');
+  }
+
+  document.getElementById('modal-vid-duration').addEventListener('input',function(){
+    document.getElementById('modal-vid-duration-val').textContent=this.value+'s';
+  });
+
+  document.getElementById('modal-vid-preview').addEventListener('click',function(){
+    stopModalVid(); runModalVid(false);
+  });
+  document.getElementById('modal-vid-export').addEventListener('click',function(){
+    stopModalVid(); runModalVid(true);
+  });
+
+  function runModalVid(exporting){
+    if(!modalActivity) return;
+    var W=600,H=600;
+    var c=document.getElementById('modal-vid-canvas');
+    c.width=W; c.height=H;
+    var ctx=c.getContext('2d');
+    var totalSecs=parseInt(document.getElementById('modal-vid-duration').value)||12;
+    var totalMs=totalSecs*1000;
+    var pts=chaikin(modalActivity.pts,2);
+    var item=modalActivity;
+    var totalKm=item.act.distance/1000;
+    var lw=Math.max(1.5,W/400);
+
+    // bounds
+    var minLat=Infinity,maxLat=-Infinity,minLng=Infinity,maxLng=-Infinity;
+    pts.forEach(function(p){if(p[0]<minLat)minLat=p[0];if(p[0]>maxLat)maxLat=p[0];if(p[1]<minLng)minLng=p[1];if(p[1]>maxLng)maxLng=p[1];});
+    var latR=maxLat-minLat||0.01,lngR=maxLng-minLng||0.01;
+    var asp=lngR/latR,cAsp=W/H,effLng,effLat;
+    if(asp>cAsp){effLng=lngR*1.14;effLat=effLng/cAsp;}else{effLat=latR*1.14;effLng=effLat*cAsp;}
+    var cLat=(maxLat+minLat)/2,cLng=(maxLng+minLng)/2;
+    var pMinLat=cLat-effLat/2,pMaxLat=cLat+effLat/2,pMinLng=cLng-effLng/2,pMaxLng=cLng+effLng/2;
+    function xy(lat,lng){return[(lng-pMinLng)/(pMaxLng-pMinLng)*W,(1-(lat-pMinLat)/(pMaxLat-pMinLat))*H];}
+
+    var chunks=[];
+    if(exporting){
+      var stream=c.captureStream(30);
+      modalVidRecorder=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp8',videoBitsPerSecond:6000000});
+      modalVidRecorder.ondataavailable=function(e){if(e.data.size>0)chunks.push(e.data);};
+      modalVidRecorder.onstop=function(){
+        var blob=new Blob(chunks,{type:'video/webm'});
+        var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+        a.download='runmap-route.webm';a.click();
+      };
+      modalVidRecorder.start();
+    }
+
+    var startTime=null;
+    function frame(ts){
+      if(!startTime) startTime=ts;
+      var elapsed=Math.min(ts-startTime,totalMs);
+      var progress=elapsed/totalMs;
+      var endIdx=Math.floor(progress*pts.length);
+
+      ctx.fillStyle='#0a0a0f'; ctx.fillRect(0,0,W,H);
+      // faint full route
+      drawGradientOnCtx(ctx,pts,xy,item.type,totalKm,lw*0.6,0.12,null);
+      // animated portion
+      if(endIdx>1) drawGradientOnCtx(ctx,pts,xy,item.type,totalKm,lw,0.9,endIdx);
+      // leading dot
+      if(endIdx>0&&endIdx<pts.length){
+        var lp=xy(pts[endIdx-1][0],pts[endIdx-1][1]);
+        var dotKm=0; for(var k=0;k<endIdx-1;k++) dotKm+=segDist(pts[k],pts[k+1]);
+        ctx.beginPath(); ctx.arc(lp[0],lp[1],lw*2.5,0,Math.PI*2);
+        ctx.fillStyle=distanceColor(item.type,totalKm,dotKm); ctx.fill();
+      }
+      // progress bar
+      document.getElementById('modal-vid-progress').style.width=(progress*100)+'%';
+
+      if(elapsed<totalMs){
+        modalVidFrame=requestAnimationFrame(frame);
+      } else {
+        if(exporting&&modalVidRecorder&&modalVidRecorder.state!=='inactive') modalVidRecorder.stop();
+        modalVidFrame=null;
+      }
+    }
+    modalVidFrame=requestAnimationFrame(frame);
+  }
+
+  document.getElementById('act-modal-close').addEventListener('click',function(){
+    stopModalVid();
+    document.getElementById('act-modal').classList.remove('open');
+  });
+  document.getElementById('act-modal').addEventListener('click',function(e){
+    if(e.target===this){stopModalVid();this.classList.remove('open');}
+  });
+  document.querySelectorAll('#modal-fmt-btns .format-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('#modal-fmt-btns .format-btn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active'); modalFmt=btn.dataset.fmt; renderModalShare();
+    });
+  });
+
+  // title input
+  document.getElementById('modal-title-input').addEventListener('input',function(){
+    modalCustomTitle = this.value;
+    renderModalShare();
+  });
+
+  // photo
+  var modalPhotoDrop = document.getElementById('modal-photo-drop');
+  modalPhotoDrop.addEventListener('click',function(){document.getElementById('modal-photo-input').click();});
+  modalPhotoDrop.addEventListener('dragover',function(e){e.preventDefault();this.style.borderColor='rgba(200,240,224,0.4)';});
+  modalPhotoDrop.addEventListener('dragleave',function(){this.style.borderColor='';});
+  modalPhotoDrop.addEventListener('drop',function(e){e.preventDefault();this.style.borderColor='';if(e.dataTransfer.files[0])loadModalPhoto(e.dataTransfer.files[0]);});
+  document.getElementById('modal-photo-input').addEventListener('change',function(){if(this.files[0])loadModalPhoto(this.files[0]);});
+
+  function loadModalPhoto(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){ modalPhoto=img; modalPhotoDrop.textContent='photo loaded ✓'; renderModalShare(); };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // scale slider
+  document.getElementById('modal-route-scale').addEventListener('input',function(){
+    modalRouteScale = parseInt(this.value)/100;
+    document.getElementById('modal-scale-val').textContent = this.value+'%';
+    renderModalShare();
+  });
+
+  // opacity slider
+  document.getElementById('modal-route-opacity').addEventListener('input',function(){
+    modalRouteOpacity = parseInt(this.value)/100;
+    document.getElementById('modal-opacity-val').textContent = this.value+'%';
+    renderModalShare();
+  });
+
+  document.getElementById('modal-dl').addEventListener('click',function(){
+    var c=document.getElementById('modal-share-canvas'),a=document.createElement('a');
+    a.download='runmap-activity-'+modalFmt+'.png'; a.href=c.toDataURL('image/png'); a.click();
+  });
+  document.getElementById('modal-dl-transparent').addEventListener('click',function(){
+    if(!modalActivity) return;
+    var dim=shareDims[modalFmt],W=dim[0],H=dim[1];
+    var off=document.createElement('canvas'); off.width=W; off.height=H;
+    var ctx=off.getContext('2d');
+    drawMiniRouteCtxScaled(ctx,modalActivity.pts,'rgba(255,255,255,0.9)',W,H,Math.max(1.5,W/400),modalRouteScale);
+    var a=document.createElement('a'); a.download='runmap-transparent-'+modalFmt+'.png'; a.href=off.toDataURL('image/png'); a.click();
+  });
+
+  // ── run club ──────────────────────────────────────────────
+  var rcFmt = 'square';
+  var rcBg  = 'dark';
+  var rcPhoto = null;
+  var rcLogoImg = null;
+  var rcInited = false;
+
+  var rcSelectedActivity = null;
+  var rcRoutePos = 'bottom';
+  var rcClub = 'cprc'; // 'cprc' | 'cptc'
+
+  function setRcClub(club){
+    rcClub=club;
+    document.getElementById('rc-club-cprc').classList.toggle('active',club==='cprc');
+    document.getElementById('rc-club-cptc').classList.toggle('active',club==='cptc');
+    // swap logo visibility
+    var cprcLogo=document.getElementById('rc-logo-img');
+    var cptcLogo=document.getElementById('rc-logo-cptc');
+    if(cprcLogo) cprcLogo.style.display=club==='cprc'?'block':'none';
+    if(cptcLogo) cptcLogo.style.display=club==='cptc'?'flex':'none';
+    renderRcCanvas();
+  } // 'bottom' | 'corner' | 'full'
+  var rcRouteColor = 'white';
+
+  function setRcRoutePos(val){
+    rcRoutePos=val;
+    ['bottom','corner','full'].forEach(function(v){
+      var el=document.getElementById('rc-pos-'+v);
+      if(el) el.classList.toggle('active',v===val);
+    });
+    renderRcCanvas();
+  }
+  function setRcRouteColor(val){
+    rcRouteColor=val;
+    ['white','black'].forEach(function(v){
+      var el=document.getElementById('rc-route-'+v);
+      if(el) el.classList.toggle('active',v===val);
+    });
+    renderRcCanvas();
+  }
+
+  function initRunClub() {
+    // set today's date as default
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementById('rc-date').value = today;
+
+    // preload logo image
+    if (!rcLogoImg) {
+      rcLogoImg = document.getElementById('rc-logo-img');
+      rcLogoImg.onload = renderRcCanvas;
+      if (rcLogoImg.complete) renderRcCanvas();
+    } else {
+      renderRcCanvas();
+    }
+    if (rcInited) return;
+    rcInited = true;
+
+    // type buttons
+    document.querySelectorAll('.rc-type-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('.rc-type-btn').forEach(function(b){b.classList.remove('active');});
+        btn.classList.add('active'); renderRcCanvas();
+      });
+    });
+
+    // format buttons
+    document.querySelectorAll('#rc-fmt-btns .format-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('#rc-fmt-btns .format-btn').forEach(function(b){b.classList.remove('active');});
+        btn.classList.add('active'); rcFmt=btn.dataset.fmt; renderRcCanvas();
+        document.getElementById('rc-preview-label').textContent =
+          rcFmt==='square'?'1080 × 1080 px':rcFmt==='portrait'?'1080 × 1350 px':'1080 × 1920 px';
+      });
+    });
+
+    // inputs
+    // populate activity selector with last 5
+    var sel = document.getElementById('rc-activity-select');
+    sel.innerHTML = '<option value="">— no route —</option>';
+    activities.slice(0,10).forEach(function(item,i){
+      var km=(item.act.distance/1000).toFixed(1);
+      var date=new Date(item.act.start_date_local).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      var opt=document.createElement('option');
+      opt.value=i; opt.textContent=item.act.name+' · '+km+'km · '+date;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change',function(){
+      rcSelectedActivity = this.value==='' ? null : activities[parseInt(this.value)];
+      renderRcCanvas();
+    });
+
+    ['rc-event-name','rc-date','rc-distance','rc-tagline'].forEach(function(id){
+      document.getElementById(id).addEventListener('input', renderRcCanvas);
+    });
+
+    // photo
+    var drop = document.getElementById('rc-photo-drop');
+    drop.addEventListener('click', function(){ document.getElementById('rc-photo-input').click(); });
+    drop.addEventListener('dragover', function(e){ e.preventDefault(); drop.style.borderColor='rgba(200,240,224,0.4)'; });
+    drop.addEventListener('dragleave', function(){ drop.style.borderColor=''; });
+    drop.addEventListener('drop', function(e){ e.preventDefault(); drop.style.borderColor=''; if(e.dataTransfer.files[0]) loadRcPhoto(e.dataTransfer.files[0]); });
+    document.getElementById('rc-photo-input').addEventListener('change', function(){ if(this.files[0]) loadRcPhoto(this.files[0]); });
+
+    // download
+    document.getElementById('rc-dl').addEventListener('click', function(){
+      var c=document.getElementById('rc-canvas'), a=document.createElement('a');
+      a.download='cprc-'+rcFmt+'.png'; a.href=c.toDataURL('image/png'); a.click();
+    });
+  }
+
+  function setRcBg(val){
+    rcBg=val;
+    document.getElementById('rc-bg-dark').classList.toggle('active', val==='dark');
+    document.getElementById('rc-bg-light').classList.toggle('active', val==='light');
+    renderRcCanvas();
+  }
+
+  function loadRcPhoto(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){ rcPhoto=img; document.getElementById('rc-photo-drop').textContent='photo loaded ✓'; renderRcCanvas(); };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderRcCanvas() {
+    var dim = shareDims[rcFmt];
+    var W=dim[0], H=dim[1];
+    var canvas = document.getElementById('rc-canvas');
+    canvas.width=W; canvas.height=H;
+    var ctx = canvas.getContext('2d');
+    var isDark = rcBg==='dark';
+
+    // background
+    if (rcPhoto) {
+      var iw=rcPhoto.naturalWidth, ih=rcPhoto.naturalHeight, scale=Math.max(W/iw,H/ih);
+      var sw=iw*scale, sh=ih*scale, ox=(W-sw)/2, oy=(H-sh)/2;
+      ctx.drawImage(rcPhoto, ox, oy, sw, sh);
+      ctx.fillStyle='rgba(10,10,15,0.6)'; ctx.fillRect(0,0,W,H);
+    } else {
+      ctx.fillStyle = isDark ? '#0a0a0f' : '#f5f4f0';
+      ctx.fillRect(0,0,W,H);
+    }
+
+    var textColor = isDark ? 'rgba(255,255,255,0.95)' : 'rgba(10,10,15,0.9)';
+    var mutedColor = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(10,10,15,0.4)';
+    var accentColor = isDark ? '#c8f0e0' : '#0f6e56';
+
+    var pad = W * 0.08;
+    var cx  = W / 2;
+
+    // ── logo centered ──
+    var maxLogoSize = H * 0.33;
+    var logoSize = Math.min(W * 0.30, maxLogoSize);
+    var logoY = rcFmt === 'story' ? H * 0.22 : H * 0.26;
+    if (rcClub==='cptc') {
+      // draw CPTC text logo
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, logoY, logoSize/2, 0, Math.PI*2);
+      ctx.strokeStyle='rgba(200,240,224,0.35)'; ctx.lineWidth=3; ctx.stroke();
+      ctx.font='300 '+Math.round(logoSize*0.12)+'px DM Mono, monospace';
+      ctx.fillStyle='rgba(200,240,224,0.6)'; ctx.textAlign='center'; ctx.letterSpacing='0.18em';
+      ctx.fillText('CENTRAL PARK', cx, logoY-logoSize*0.18);
+      ctx.font='bold '+Math.round(logoSize*0.35)+'px Georgia, serif';
+      ctx.fillStyle='#c8f0e0';
+      ctx.fillText('CPTC', cx, logoY+logoSize*0.1);
+      ctx.font='300 '+Math.round(logoSize*0.12)+'px DM Mono, monospace';
+      ctx.fillStyle='rgba(200,240,224,0.6)'; ctx.letterSpacing='0.18em';
+      ctx.fillText('TRACK CLUB', cx, logoY+logoSize*0.28);
+      ctx.restore();
+    } else if (rcLogoImg && rcLogoImg.complete && rcLogoImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, logoY, logoSize/2, 0, Math.PI*2);
+      ctx.clip();
+      ctx.drawImage(rcLogoImg, cx-logoSize/2, logoY-logoSize/2, logoSize, logoSize);
+      ctx.restore();
+    }
+
+    var afterLogo = logoY + logoSize/2 + W*0.06;
+
+    // ── type tag ──
+    var typeText = (document.querySelector('.rc-type-btn.active') || {}).dataset || {};
+    var type = typeText.type || 'Fun Run';
+    ctx.font = '300 '+Math.round(W*0.018)+'px DM Mono, monospace';
+    ctx.fillStyle = accentColor;
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '0.2em';
+    ctx.fillText(type.toUpperCase(), cx, afterLogo);
+    ctx.letterSpacing = '0';
+
+    // ── event name ──
+    var name = document.getElementById('rc-event-name').value || 'Tuesday Night Run';
+    ctx.font = 'italic 300 '+Math.round(W*0.065)+'px Cormorant, serif';
+    ctx.fillStyle = textColor;
+    ctx.textAlign = 'center';
+    ctx.fillText(name, cx, afterLogo + W*0.082);
+
+    // ── divider ──
+    var divY = afterLogo + W*0.105;
+    ctx.strokeStyle = isDark?'rgba(255,255,255,0.12)':'rgba(10,10,15,0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(cx-W*0.12, divY); ctx.lineTo(cx+W*0.12, divY); ctx.stroke();
+
+    // ── date + distance ──
+    var dateVal = document.getElementById('rc-date').value;
+    var dateStr = dateVal ? new Date(dateVal+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) : '';
+    var dist = document.getElementById('rc-distance').value;
+    var metaLine = [dateStr, dist].filter(Boolean).join('  ·  ');
+    if (metaLine) {
+      ctx.font = '300 '+Math.round(W*0.022)+'px DM Mono, monospace';
+      ctx.fillStyle = mutedColor;
+      ctx.textAlign = 'center';
+      ctx.fillText(metaLine, cx, divY + W*0.04);
+    }
+
+    // ── tagline ──
+    var tagline = document.getElementById('rc-tagline').value;
+    if (tagline) {
+      ctx.font = 'italic 300 '+Math.round(W*0.028)+'px Cormorant, serif';
+      ctx.fillStyle = mutedColor;
+      ctx.textAlign = 'center';
+      ctx.fillText(tagline, cx, divY + W*0.08);
+    }
+
+    // ── route from selected activity ──────────────────────────────
+    if (rcSelectedActivity && rcSelectedActivity.pts && rcSelectedActivity.pts.length) {
+      var pts = rcSelectedActivity.pts;
+      var rColor = rcRouteColor==='white' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.75)';
+      var rlw = Math.max(1.5, W/500);
+
+      if (rcRoutePos === 'full') {
+        // draw route full canvas behind everything — redraw needed
+        // instead draw lightly over current
+        drawRcRoute(ctx, pts, rColor, 0, 0, W, H, rlw, 0.35);
+      } else if (rcRoutePos === 'corner') {
+        var rs = W*0.28; var rx = W-pad-rs; var ry = H-pad-rs;
+        drawRcRoute(ctx, pts, rColor, rx, ry, rs, rs, rlw, 1.0);
+      } else {
+        // bottom strip — no box, just route lines
+        var stripH = H * 0.18;
+        var stripY = H - stripH - pad*0.5;
+        drawRcRoute(ctx, pts, rColor, pad, stripY, W-pad*2, stripH, rlw, 1.0);
+      }
+    }
+
+    // ── bottom: CPRC wordmark ──
+    ctx.font = '300 '+Math.round(W*0.016)+'px DM Mono, monospace';
+    ctx.fillStyle = mutedColor;
+    ctx.textAlign = 'center';
+    ctx.fillText(rcClub==='cptc'?'CENTRAL PARK TRACK CLUB':'CENTRAL PARK RUN CLUB', cx, H - pad*0.6);
+  }
+
+  function drawRcRoute(ctx, pts, color, rx, ry, rw, rh, lw, opacity) {
+    var minLat=Infinity,maxLat=-Infinity,minLng=Infinity,maxLng=-Infinity;
+    pts.forEach(function(p){if(p[0]<minLat)minLat=p[0];if(p[0]>maxLat)maxLat=p[0];if(p[1]<minLng)minLng=p[1];if(p[1]>maxLng)maxLng=p[1];});
+    var latR=maxLat-minLat||0.01, lngR=maxLng-minLng||0.01;
+    var mapAsp=lngR/latR, boxAsp=rw/rh, effLng, effLat;
+    if(mapAsp>boxAsp){effLng=lngR*1.12;effLat=effLng/boxAsp;}else{effLat=latR*1.12;effLng=effLat*boxAsp;}
+    var cLat=(maxLat+minLat)/2, cLng=(maxLng+minLng)/2;
+    var pMinLat=cLat-effLat/2, pMaxLat=cLat+effLat/2, pMinLng=cLng-effLng/2, pMaxLng=cLng+effLng/2;
+    function xy(lat,lng){return[rx+(lng-pMinLng)/(pMaxLng-pMinLng)*rw, ry+(1-(lat-pMinLat)/(pMaxLat-pMinLat))*rh];}
+    var sPts = chaikin(pts, 2);
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.beginPath();
+    ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.lineJoin='round'; ctx.lineCap='round';
+    var first=true;
+    sPts.forEach(function(p){var c=xy(p[0],p[1]);if(first){ctx.moveTo(c[0],c[1]);first=false;}else ctx.lineTo(c[0],c[1]);});
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── shared: draw distance-gradient route on any canvas ctx ──────────
+  // xy: function(lat,lng)->[x,y], pts: array of [lat,lng]
+  // type: 'run'|'ride', totalKm: number, maxPts: how many pts to draw (for animation)
+  function drawGradientOnCtx(ctx, pts, xy, type, totalKm, lw, opacity, maxPts) {
+    if(!pts||pts.length<2) return;
+    var end = maxPts != null ? Math.min(maxPts, pts.length) : pts.length;
+    var kmSoFar = 0;
+    ctx.save();
+    ctx.globalAlpha = opacity!=null ? opacity : 1.0;
+    ctx.lineWidth=lw; ctx.lineJoin='round'; ctx.lineCap='round';
+    for(var i=0; i<end-1; i++){
+      var col = distanceColor(type, totalKm, kmSoFar);
+      var d = segDist(pts[i], pts[i+1]);
+      kmSoFar += d;
+      ctx.beginPath();
+      ctx.strokeStyle=col;
+      var a=xy(pts[i][0],pts[i][1]), b=xy(pts[i+1][0],pts[i+1][1]);
+      ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+
+  // ── video tab ──────────────────────────────────────────────
+  var vidTheme = 'dark';
+  var vidSize  = 'square';
+  var vidAnimFrame = null;
+  var vidRecorder  = null;
+  var vidInited    = false;
+
+  function setVidTheme(v){
+    vidTheme=v;
+    document.getElementById('vid-dark-btn').classList.toggle('active',v==='dark');
+    document.getElementById('vid-light-btn').classList.toggle('active',v==='light');
+  }
+  function setVidSize(v){
+    vidSize=v;
+    document.getElementById('vid-sq-btn').classList.toggle('active',v==='square');
+    document.getElementById('vid-story-btn').classList.toggle('active',v==='story');
+    resizeVidCanvas();
+  }
+  function resizeVidCanvas(){
+    var canvas=document.getElementById('vid-canvas');
+    var wrap=document.getElementById('vid-canvas-wrap');
+    if(vidSize==='story'){
+      wrap.style.aspectRatio='9/16';
+      canvas.width=1080; canvas.height=1920;
+    } else {
+      wrap.style.aspectRatio='1';
+      canvas.width=1080; canvas.height=1080;
+    }
+  }
+
+  function getVidItems(){
+    var sel=document.getElementById('vid-city-select');
+    var val=sel.value;
+    if(val==='all') return activities;
+    var idx=parseInt(val);
+    return cities[idx]?cities[idx].items:activities;
+  }
+
+  function initVideo(){
+    if(vidInited) return; vidInited=true;
+    resizeVidCanvas();
+
+    // populate city dropdown
+    var sel=document.getElementById('vid-city-select');
+    sel.innerHTML='<option value="all">all activities</option>';
+    cities.forEach(function(cl,i){
+      var o=document.createElement('option');
+      o.value=i; o.textContent=cl.name+' ('+cl.items.length+')'; sel.appendChild(o);
+    });
+    // auto-select biggest city
+    if(cities.length>0){ sel.value='0'; }
+
+    document.getElementById('vid-duration').addEventListener('input',function(){
+      document.getElementById('vid-duration-val').textContent=this.value+'s';
+    });
+
+    document.getElementById('vid-preview-btn').addEventListener('click',function(){
+      stopVid();
+      runVidAnimation(false);
+    });
+    document.getElementById('vid-stop-btn').addEventListener('click', stopVid);
+    document.getElementById('vid-export-btn').addEventListener('click',function(){
+      stopVid();
+      runVidAnimation(true);
+    });
+  }
+
+  function stopVid(){
+    if(vidAnimFrame){ cancelAnimationFrame(vidAnimFrame); vidAnimFrame=null; }
+    if(vidRecorder && vidRecorder.state!=='inactive'){ vidRecorder.stop(); vidRecorder=null; }
+    document.getElementById('vid-preview-btn').disabled=false;
+    document.getElementById('vid-stop-btn').disabled=true;
+  }
+
+  function runVidAnimation(exporting){
+    var items = getVidItems();
+    if(!items.length){ document.getElementById('vid-status').textContent='no activities in this city'; return; }
+
+    var canvas = document.getElementById('vid-canvas');
+    var ctx    = canvas.getContext('2d');
+    var W=canvas.width, H=canvas.height;
+    var isDark = (vidTheme||SC_VID.theme)==='dark';
+    var bg     = isDark ? '#0a0a0f' : '#f5f4f0';
+    var routeC = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(10,10,15,0.75)';
+    var mutedC = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(10,10,15,0.25)';
+
+    var totalSecs = parseInt(document.getElementById('vid-duration').value)||30;
+    var totalMs   = totalSecs * 1000;
+    var secsPerRun = totalMs / items.length;
+
+    // bounds: use cityFit if available, else percentile
+    var pMinLat,pMaxLat,pMinLng,pMaxLng;
+    var sel=document.getElementById('vid-city-select');
+    var vidCityKey = sel.value!=='all' && cities[parseInt(sel.value)] ? cities[parseInt(sel.value)].name : null;
+    if(vidCityKey && cityFits[vidCityKey]){
+      var fit=cityFits[vidCityKey];
+      var latR=fit.maxLat-fit.minLat||0.01, lngR=fit.maxLng-fit.minLng||0.01;
+      var mapAsp=lngR/latR, canAsp=W/H, effLng, effLat;
+      if(mapAsp>canAsp){effLng=lngR;effLat=effLng/canAsp;}
+      else{effLat=latR;effLng=effLat*canAsp;}
+      var cLat=(fit.maxLat+fit.minLat)/2, cLng=(fit.maxLng+fit.minLng)/2;
+      pMinLat=cLat-effLat/2; pMaxLat=cLat+effLat/2;
+      pMinLng=cLng-effLng/2; pMaxLng=cLng+effLng/2;
+    } else {
+      var allLats=[], allLngs=[];
+      items.forEach(function(item){item.pts.forEach(function(p){allLats.push(p[0]);allLngs.push(p[1]);});});
+      allLats.sort(function(a,b){return a-b;}); allLngs.sort(function(a,b){return a-b;});
+      var pct=function(arr,p){return arr[Math.floor(arr.length*p)];};
+      var minLat=pct(allLats,0.02),maxLat=pct(allLats,0.98);
+      var minLng=pct(allLngs,0.02),maxLng=pct(allLngs,0.98);
+      var latR=maxLat-minLat||0.01,lngR=maxLng-minLng||0.01;
+      var mapAsp=lngR/latR,canAsp=W/H,effLng,effLat;
+      if(mapAsp>canAsp){effLng=lngR*1.12;effLat=effLng/canAsp;}
+      else{effLat=latR*1.12;effLng=effLat*canAsp;}
+      var cLat=(maxLat+minLat)/2,cLng=(maxLng+minLng)/2;
+      pMinLat=cLat-effLat/2;pMaxLat=cLat+effLat/2;
+      pMinLng=cLng-effLng/2;pMaxLng=cLng+effLng/2;
+    }
+    function xy(lat,lng){return[(lng-pMinLng)/(pMaxLng-pMinLng)*W,(1-(lat-pMinLat)/(pMaxLat-pMinLat))*H];}
+
+    var lw = Math.max(1.5, W/500);
+    var startTime = null;
+    var chunks = [];
+
+    // setup recorder for export
+    if(exporting){
+      var stream = canvas.captureStream(30);
+      vidRecorder = new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp8', videoBitsPerSecond:8000000});
+      vidRecorder.ondataavailable=function(e){ if(e.data.size>0) chunks.push(e.data); };
+      vidRecorder.onstop=function(){
+        var blob=new Blob(chunks,{type:'video/webm'});
+        var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+        a.download='runmap-video-'+totalSecs+'s.webm'; a.click();
+        document.getElementById('vid-status').textContent='video downloaded ✓';
+      };
+      vidRecorder.start();
+      document.getElementById('vid-status').textContent='recording… '+totalSecs+'s';
+    } else {
+      document.getElementById('vid-status').textContent='previewing '+items.length+' activities · '+totalSecs+'s';
+    }
+
+    document.getElementById('vid-preview-btn').disabled=true;
+    document.getElementById('vid-stop-btn').disabled=false;
+
+    // pre-smooth and pre-render completed routes to offscreen canvases
+    var items = items.slice().reverse();
+    var smoothed = items.map(function(item){ return chaikin(item.pts,2); });
+    // offscreen canvases for completed routes (drawn once, reused every frame)
+    var offscreens = new Array(items.length).fill(null);
+    function getOffscreen(i) {
+      if(offscreens[i]) return offscreens[i];
+      var off = document.createElement('canvas'); off.width=W; off.height=H;
+      var octx = off.getContext('2d');
+      var cPts=smoothed[i], cKm=items[i].act.distance/1000;
+      drawGradientOnCtx(octx, cPts, xy, items[i].type, cKm, lw*0.8, 0.15, null);
+      offscreens[i]=off; return off;
+    }
+
+    function frame(ts){
+      if(!startTime) startTime=ts;
+      var elapsed = ts - startTime;
+      var totalProgress = Math.min(elapsed / totalMs, 1);
+
+      // which run are we on
+      var runIdx = Math.min(Math.floor(elapsed / secsPerRun), items.length-1);
+      var runProgress = Math.min((elapsed - runIdx*secsPerRun) / secsPerRun, 1);
+
+      // clear
+      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+      // draw all completed runs — from offscreen cache
+      for(var i=0;i<runIdx;i++){
+        ctx.drawImage(getOffscreen(i), 0, 0);
+      }
+
+      // draw current run up to runProgress — full gradient
+      var curItem=items[runIdx], curPts=smoothed[runIdx];
+      var curKm=curItem.act.distance/1000;
+      var endIdx=Math.floor(runProgress*curPts.length);
+      if(endIdx>1){
+        drawGradientOnCtx(ctx, curPts, xy, curItem.type, curKm, lw, 0.9, endIdx);
+
+        // leading dot — color at current position
+        var leadKm=0;
+        for(var j=0;j<endIdx-1;j++) leadKm+=segDist(curPts[j],curPts[j+1]);
+        var dotColor = distanceColor(curItem.type, curKm, leadKm);
+        var lp=xy(curPts[endIdx-1][0],curPts[endIdx-1][1]);
+        ctx.beginPath();
+        ctx.arc(lp[0],lp[1],lw*2.5,0,Math.PI*2);
+        ctx.fillStyle=dotColor;
+        ctx.fill();
+      }
+
+      // overlay: text at bottom
+      var isLast = (runIdx===items.length-1 && runProgress>=0.98);
+      var fs=Math.round(W*0.02);
+      var padB=H*0.05;
+      ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=12;
+      if(isLast){
+        // no overlay — just show totals at top, clean
+        var totalRuns=items.filter(function(x){return x.type==='run';}).length;
+        var totalRides=items.filter(function(x){return x.type==='ride';}).length;
+        var totalKmAll=(items.reduce(function(s,x){return s+x.act.distance;},0)/1000).toFixed(0);
+        var pad=H*0.06;
+        ctx.shadowColor='rgba(0,0,0,0.9)'; ctx.shadowBlur=16;
+        // big km at top
+        ctx.font='italic 300 '+Math.round(W*0.09)+'px Cormorant, serif';
+        ctx.fillStyle=isDark?'rgba(255,255,255,0.95)':'rgba(10,10,15,0.95)';
+        ctx.textAlign='center';
+        ctx.fillText(totalKmAll+' km', W*0.5, pad+Math.round(W*0.09));
+        // runs · rides below it
+        ctx.font='300 '+Math.round(W*0.022)+'px DM Mono, monospace';
+        ctx.fillStyle=isDark?'rgba(255,255,255,0.5)':'rgba(10,10,15,0.5)';
+        ctx.fillText(totalRuns+' runs  ·  '+totalRides+' rides', W*0.5, pad+Math.round(W*0.09)+Math.round(W*0.038));
+        ctx.shadowBlur=0;
+      } else {
+        var act=items[runIdx].act;
+        var km=(act.distance/1000).toFixed(1);
+        ctx.font='italic 300 '+Math.round(W*0.026)+'px Cormorant, serif';
+        ctx.fillStyle=isDark?'rgba(255,255,255,0.75)':'rgba(10,10,15,0.75)';
+        ctx.textAlign='left';
+        ctx.fillText(act.name, W*0.05, H-padB-fs*1.8);
+        ctx.font='300 '+fs+'px DM Mono, monospace';
+        ctx.fillStyle=isDark?'rgba(255,255,255,0.38)':'rgba(10,10,15,0.38)';
+        ctx.fillText(km+' km  ·  '+(runIdx+1)+'/'+items.length, W*0.05, H-padB);
+      }
+      ctx.shadowBlur=0;
+
+      // progress bar
+      document.getElementById('vid-progress-bar').style.width=(totalProgress*100)+'%';
+      document.getElementById('vid-counter').textContent=(runIdx+1)+' / '+items.length;
+
+      if(elapsed<totalMs){
+        vidAnimFrame=requestAnimationFrame(frame);
+      } else {
+        // done
+        if(exporting && vidRecorder && vidRecorder.state!=='inactive') vidRecorder.stop();
+        document.getElementById('vid-preview-btn').disabled=false;
+        document.getElementById('vid-stop-btn').disabled=true;
+        if(!exporting) document.getElementById('vid-status').textContent='done — press preview to replay';
+      }
+    }
+
+    vidAnimFrame=requestAnimationFrame(frame);
+  }
+
+
+  // ── settings tab ──────────────────────────────────────────────────
+  var settingsInited=false, fitEditorMaps={};
+
+  function initSettings(){
+    if(!settingsInited){
+      settingsInited=true;
+      // color swatches
+      ['run-base','run-t1','run-t2','run-t3','ride-base','ride-t1','ride-t2','ride-t3'].forEach(function(k){
+        var el=document.getElementById('sc-'+k);
+        if(!el) return;
+        var hexEl=el.nextElementSibling;
+        el.addEventListener('input',function(){ if(hexEl) hexEl.textContent=this.value; });
+        if(hexEl) hexEl.addEventListener('click',function(){ el.click(); });
+      });
+      document.getElementById('sc-colors-apply').addEventListener('click',function(){
+        var keys=['runBase','runT1','runT2','runT3','rideBase','rideT1','rideT2','rideT3'];
+        var ids=['run-base','run-t1','run-t2','run-t3','ride-base','ride-t1','ride-t2','ride-t3'];
+        keys.forEach(function(k,i){ var el=document.getElementById('sc-'+ids[i]); if(el) SC_COLORS[k]=el.value; });
+        if(activities.length) renderLines();
+        this.textContent='applied ✓'; var btn=this;
+        setTimeout(function(){btn.textContent='apply colors';},1500);
+      });
+      // fonts
+      document.querySelectorAll('#sc-font-options .font-opt').forEach(function(opt){
+        opt.addEventListener('click',function(){
+          document.querySelectorAll('#sc-font-options .font-opt').forEach(function(o){o.classList.remove('active');});
+          opt.classList.add('active'); SC_FONT=parseInt(opt.dataset.font);
+        });
+      });
+      // video defaults
+      document.getElementById('sc-vid-duration').addEventListener('input',function(){
+        SC_VID.duration=parseInt(this.value);
+        document.getElementById('sc-vid-duration-val').textContent=this.value+'s';
+        var vs=document.getElementById('vid-duration');
+        if(vs){vs.value=this.value;document.getElementById('vid-duration-val').textContent=this.value+'s';}
+      });
+      // disconnect
+      document.getElementById('settings-disconnect-btn').addEventListener('click',function(){clearToken();clearCache();window.location.href=REDIRECT_URI;});
+    }
+    buildSettingsCityList();
+  }
+
+  function buildSettingsCityList(){
+    var list=document.getElementById('settings-city-list');
+    list.innerHTML='';
+    if(!cities.length){list.innerHTML='<div style="font-size:0.58rem;color:var(--muted);">load activities first</div>';return;}
+    cities.forEach(function(cl){
+      var hasFit=!!cityFits[cl.name];
+      var item=document.createElement('div'); item.className='city-fit-item';
+      var header=document.createElement('div'); header.className='city-fit-header';
+      var nm=document.createElement('span'); nm.className='city-fit-name'; nm.textContent=cl.name;
+      var st=document.createElement('span'); st.className='city-fit-status'+(hasFit?' set':''); st.textContent=hasFit?'✓ fit set':'no fit';
+      header.appendChild(nm); header.appendChild(st);
+      var editor=document.createElement('div'); editor.className='city-fit-editor';
+      // fmt picker
+      var fmtRow=document.createElement('div'); fmtRow.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);';
+      fmtRow.innerHTML='<span style="font-size:0.54rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;">ratio</span><div style="display:flex;gap:5px;"><button class="color-mode-btn active" data-fitfmt="square">square</button><button class="color-mode-btn" data-fitfmt="story">story</button></div>';
+      // map
+      var mwrap=document.createElement('div'); mwrap.className='city-fit-map-wrap';
+      var mdiv=document.createElement('div'); mdiv.style.cssText='width:100%;height:100%;';
+      mwrap.appendChild(mdiv);
+      // rect + handles
+      var rectEl=document.createElement('div'); rectEl.className='fit-rect-overlay';
+      var handles={tl:document.createElement('div'),tr:document.createElement('div'),bl:document.createElement('div'),br:document.createElement('div')};
+      Object.keys(handles).forEach(function(pos){handles[pos].className='fit-handle '+pos;rectEl.appendChild(handles[pos]);});
+      mwrap.appendChild(rectEl);
+      // actions
+      var acts=document.createElement('div'); acts.className='city-fit-actions';
+      var saveBtn=document.createElement('button'); saveBtn.className='vid-btn primary'; saveBtn.style.flex='1'; saveBtn.textContent='save fit';
+      var clearBtn=document.createElement('button'); clearBtn.className='vid-btn'; clearBtn.textContent='clear';
+      acts.appendChild(saveBtn); acts.appendChild(clearBtn);
+      editor.appendChild(fmtRow); editor.appendChild(mwrap); editor.appendChild(acts);
+      item.appendChild(header); item.appendChild(editor);
+      list.appendChild(item);
+      // toggle
+      header.addEventListener('click',function(){
+        var wasOpen=editor.classList.contains('open');
+        document.querySelectorAll('.city-fit-editor').forEach(function(e){e.classList.remove('open');});
+        if(!wasOpen){editor.classList.add('open');setTimeout(function(){initFitMap(cl,mdiv,rectEl,handles,fmtRow,saveBtn,clearBtn,st);},60);}
+      });
+    });
+  }
+
+  function initFitMap(cl,mdiv,rectEl,handles,fmtRow,saveBtn,clearBtn,statusEl){
+    var key=cl.name;
+    // Always destroy and recreate — fixes blank map on reopen
+    if(fitEditorMaps[key]){ try{fitEditorMaps[key].remove();}catch(e){} delete fitEditorMaps[key]; }
+    mdiv.innerHTML='';
+    var m=L.map(mdiv,{zoomControl:true}).setView([cl.lat,cl.lng],13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(m);
+    cl.items.forEach(function(item){L.polyline(item.pts,{color:item.type==='ride'?RIDE_COLOR:RUN_COLOR,weight:1,opacity:0.4}).addTo(m);});
+    var pts=[];cl.items.forEach(function(x){pts=pts.concat(x.pts);});
+    if(pts.length) m.fitBounds(L.latLngBounds(pts),{padding:[20,20]});
+    fitEditorMaps[key]=m;
+    setTimeout(function(){m.invalidateSize();},100);
+    var wrap=mdiv.parentElement;
+    var fitFmt='square';
+    var existing=cityFits[key];
+    var rx,ry,rw,rh;
+    if(existing){
+      var tl=m.latLngToContainerPoint([existing.maxLat,existing.minLng]);
+      var br=m.latLngToContainerPoint([existing.minLat,existing.maxLng]);
+      rx=tl.x;ry=tl.y;rw=Math.abs(br.x-tl.x);rh=Math.abs(br.y-tl.y);
+    } else {
+      var WW=wrap.offsetWidth,WH=wrap.offsetHeight;
+      rw=WW*0.65;rh=rw;rx=(WW-rw)/2;ry=(WH-rh)/2;
+    }
+    function draw(){
+      rw=Math.max(40,rw);rh=Math.max(40,rh);
+      rx=Math.max(0,rx);ry=Math.max(0,ry);
+      rectEl.style.left=rx+'px';rectEl.style.top=ry+'px';rectEl.style.width=rw+'px';rectEl.style.height=rh+'px';
+    }
+    draw();
+    Object.keys(handles).forEach(function(pos){
+      var h=handles[pos];
+      var sx,sy,srx,sry,srw,srh;
+      h.addEventListener('mousedown',function(e){
+        e.preventDefault();e.stopPropagation();
+        m.dragging.disable();
+        sx=e.clientX;sy=e.clientY;srx=rx;sry=ry;srw=rw;srh=rh;
+        function mv(e){
+          var dx=e.clientX-sx,dy=e.clientY-sy;
+          if(pos==='tl'){rx=srx+dx;ry=sry+dy;rw=srw-dx;rh=srh-dy;}
+          else if(pos==='tr'){rw=srw+dx;ry=sry+dy;rh=srh-dy;}
+          else if(pos==='bl'){rx=srx+dx;rw=srw-dx;rh=srh+dy;}
+          else{rw=srw+dx;rh=srh+dy;}
+          if(fitFmt==='story') rh=rw*(16/9);
+          else rh=rw;
+          draw();
+        }
+        function up(){m.dragging.enable();document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);}
+        document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+      });
+    });
+    fmtRow.querySelectorAll('[data-fitfmt]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        fmtRow.querySelectorAll('[data-fitfmt]').forEach(function(b){b.classList.remove('active');});
+        btn.classList.add('active');fitFmt=btn.dataset.fitfmt;
+        if(fitFmt==='story') rh=rw*(16/9); else rh=rw; draw();
+      });
+    });
+    saveBtn.addEventListener('click',function(){
+      var tl=m.containerPointToLatLng([rx,ry]);
+      var br=m.containerPointToLatLng([rx+rw,ry+rh]);
+      cityFits[key]={minLat:Math.min(tl.lat,br.lat),maxLat:Math.max(tl.lat,br.lat),minLng:Math.min(tl.lng,br.lng),maxLng:Math.max(tl.lng,br.lng)};
+      statusEl.textContent='✓ fit set';statusEl.classList.add('set');
+      saveBtn.textContent='saved ✓';setTimeout(function(){saveBtn.textContent='save fit';},1500);
+    });
+    clearBtn.addEventListener('click',function(){delete cityFits[key];statusEl.textContent='no fit';statusEl.classList.remove('set');});
+  }
+
+
+  // ── marathons tab ────────────────────────────────────────────────
+  function getMarathons(){
+    return activities.filter(function(item){
+      var km=item.act.distance/1000;
+      return item.type==='run' && km>=(42.195-1.5) && km<=(42.195+1.5);
+    }).sort(function(a,b){
+      return new Date(a.act.start_date)-new Date(b.act.start_date);
+    });
+  }
+
+  function renderMarathons(){
+    var marathons=getMarathons();
+    var grid=document.getElementById('marathon-grid');
+    var bar=document.getElementById('marathon-stats-bar');
+    grid.innerHTML='';
+
+    if(!marathons.length){
+      grid.innerHTML='<div class="marathon-empty">no marathons found yet — keep running! 🏅</div>';
+      bar.innerHTML='';
+      return;
+    }
+
+    // stats bar
+    var totalKm=marathons.reduce(function(s,x){return s+x.act.distance;},0)/1000;
+    var bestTime=Math.min.apply(null,marathons.map(function(x){return x.act.moving_time||9999999;}));
+    bar.innerHTML=[
+      {val:marathons.length,label:'marathons'},
+      {val:totalKm.toFixed(0)+' km',label:'total distance'},
+      {val:fmtDuration(bestTime),label:'best time'}
+    ].map(function(s){
+      return '<div><div style="font-size:1.4rem;font-family:DM Mono,monospace;color:var(--accent);">'+s.val+'</div><div style="font-size:0.52rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;">'+s.label+'</div></div>';
+    }).join('<div style="width:1px;background:var(--border);"></div>');
+
+    // cards
+    marathons.forEach(function(item,i){
+      var act=item.act;
+      var km='42.195'; // official marathon distance — GPS variance is satellite error
+      var date=new Date(act.start_date_local).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+      var pace=fmtPace(act);
+      var card=document.createElement('div'); card.className='marathon-card';
+      card.innerHTML=
+        '<div class="marathon-num">'+(i+1)+'</div>'+
+        '<div class="marathon-name">'+act.name+'</div>'+
+        '<div class="marathon-date">'+date+'</div>'+
+        '<div class="marathon-stats">'+
+          '<div><div class="marathon-stat-val">'+km+'</div><div class="marathon-stat-label">km</div></div>'+
+          '<div><div class="marathon-stat-val">'+fmtDuration(act.moving_time||0)+'</div><div class="marathon-stat-label">time</div></div>'+
+          '<div><div class="marathon-stat-val">'+pace+'</div><div class="marathon-stat-label">pace</div></div>'+
+        '</div>'+
+        '<div class="marathon-canvas-wrap"><canvas id="mcanvas-'+i+'" height="80"></canvas></div>';
+      card.style.cursor='pointer';
+      card.addEventListener('click',function(){openActivityModal(item);});
+      grid.appendChild(card);
+      // draw route
+      setTimeout(function(idx, itm){
+        var c=document.getElementById('mcanvas-'+idx);
+        if(!c) return;
+        c.width=c.offsetWidth||280;
+        drawMiniRoute(c, itm.pts, '#c8f0e0');
+      }.bind(null,i,item), 50*i);
+    });
+  }
+
+  function doStravaAuth(){
+    window.location.href='https://www.strava.com/oauth/authorize?client_id='+CLIENT_ID+'&redirect_uri='+encodeURIComponent(REDIRECT_URI)+'&response_type=code&approval_prompt=auto&scope=activity:read_all';
+  }
+  document.getElementById('landing-connect-btn').addEventListener('click',function(e){e.preventDefault();doStravaAuth();});
+
+  async function boot(){
+    var params=new URLSearchParams(window.location.search);
+    var code=params.get('code'),token=getToken();
+    if(code){
+      window.history.replaceState({},'',REDIRECT_URI);
+      document.getElementById('landing').classList.add('hidden');
+      document.getElementById('loading-screen').classList.add('visible');
+      setProgress(10,'exchanging token...');
+      var data=await exchangeCode(code);
+      if(!data.access_token){alert('Auth failed — try again.');document.getElementById('landing').classList.remove('hidden');document.getElementById('loading-screen').classList.remove('visible');return;}
+      saveToken(data.access_token); token=data.access_token;
+    }
+    if(token){
+      document.getElementById('landing').classList.add('hidden');
+      var cached=loadCache();
+      if(cached&&cached.length>0){
+        document.getElementById('loading-screen').classList.add('visible');
+        setProgress(95,'loading from cache...');
+        try {
+          await renderAll(cached);
+          document.getElementById('loading-screen').classList.remove('visible');
+          return;
+        } catch(e) {
+          console.warn('Cache load failed, fetching fresh:', e);
+          clearCache();
+          // fall through to fresh fetch below
+        }
+      }
+      document.getElementById('loading-screen').classList.add('visible');
+      document.getElementById('loading-first-time').style.display='block';
+      // cycle runner emojis
+      var runnerEmojis=['🏃','🏃‍♂️','🏃‍♀️','🏃','💨','🏅','🗺️','📍','🌆','🛣️','🏙️','⚡'];
+      var rIdx=0;
+      var runnerInterval=setInterval(function(){
+        rIdx=(rIdx+1)%runnerEmojis.length;
+        var el=document.getElementById('loading-runner');
+        if(el) el.textContent=runnerEmojis[rIdx];
+      },600);
+      setProgress(20,'fetching activities...');
+      var acts=await fetchActivities(token); saveCache(acts);
+      clearInterval(runnerInterval);
+      setProgress(85,'drawing routes...');
+      await renderAll(acts); return;
+    }
+    document.getElementById('landing').classList.remove('hidden');
+  }
+
+  boot();
+</script>
+
+<!-- SETTINGS VIEW -->
+<div id="view-settings" class="view-pane">
+  <div style="margin-bottom:24px;">
+    <div style="font-family:'Cormorant',serif;font-weight:300;font-style:italic;font-size:2rem;color:var(--accent);margin-bottom:4px;">settings</div>
+    <div style="font-size:0.6rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;">customize your runmap</div>
+  </div>
+  <div class="settings-layout">
+    <div>
+      <div class="settings-section">
+        <div class="settings-section-title">city view fits</div>
+        <div class="settings-note" style="margin-bottom:14px;">drag the rectangle corners to set the crop for each city — used in video and share.</div>
+        <div id="settings-city-list"></div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">route colors</div>
+        <div class="color-row"><span class="color-row-label">runs base</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-run-base" class="color-swatch" value="#f0f0f0"><span class="color-hex">#f0f0f0</span></div></div>
+        <div class="color-row"><span class="color-row-label">runs 12km+ (pink)</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-run-t1" class="color-swatch" value="#f472b6"><span class="color-hex">#f472b6</span></div></div>
+        <div class="color-row"><span class="color-row-label">runs 20km+ (rose)</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-run-t2" class="color-swatch" value="#e11d48"><span class="color-hex">#e11d48</span></div></div>
+        <div class="color-row"><span class="color-row-label">runs 30km+ (red)</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-run-t3" class="color-swatch" value="#dc2626"><span class="color-hex">#dc2626</span></div></div>
+        <div class="color-row" style="margin-top:12px;"><span class="color-row-label">rides base</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-ride-base" class="color-swatch" value="#f0f0f0"><span class="color-hex">#f0f0f0</span></div></div>
+        <div class="color-row"><span class="color-row-label">rides 30km+ (yellow)</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-ride-t1" class="color-swatch" value="#fde68a"><span class="color-hex">#fde68a</span></div></div>
+        <div class="color-row"><span class="color-row-label">rides 60km+ (amber)</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-ride-t2" class="color-swatch" value="#f59e0b"><span class="color-hex">#f59e0b</span></div></div>
+        <div class="color-row"><span class="color-row-label">rides 130km+ (orange)</span><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="sc-ride-t3" class="color-swatch" value="#ea580c"><span class="color-hex">#ea580c</span></div></div>
+        <button class="vid-btn primary" style="margin-top:14px;" id="sc-colors-apply">apply colors</button>
+      </div>
+    </div>
+    <div>
+      <div class="settings-section">
+        <div class="settings-section-title">overlay font</div>
+        <div id="sc-font-options">
+          <div class="font-opt active" data-font="0">
+            <div class="font-opt-name">default — cormorant + dm mono</div>
+            <div class="font-opt-preview" style="font-family:'Cormorant',serif;font-style:italic;">runmap / your routes</div>
+          </div>
+          <div class="font-opt" data-font="1">
+            <div class="font-opt-name">geometric — futura</div>
+            <div class="font-opt-preview" style="font-family:Futura,'Century Gothic',sans-serif;font-weight:300;letter-spacing:0.1em;font-size:0.95rem;">RUNMAP / YOUR ROUTES</div>
+          </div>
+          <div class="font-opt" data-font="2">
+            <div class="font-opt-name">editorial — garamond</div>
+            <div class="font-opt-preview" style="font-family:Garamond,'Times New Roman',serif;font-style:italic;font-size:1.3rem;">runmap / your routes</div>
+          </div>
+          <div class="font-opt" data-font="3">
+            <div class="font-opt-name">minimal — monospace</div>
+            <div class="font-opt-preview" style="font-family:'DM Mono',monospace;font-size:0.85rem;letter-spacing:0.16em;">RUNMAP / YOUR ROUTES</div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">video defaults</div>
+        <div class="vid-default-row"><span class="vid-default-label">duration</span><div style="display:flex;align-items:center;gap:8px;"><input type="range" id="sc-vid-duration" min="10" max="120" value="30" style="width:100px;"><span id="sc-vid-duration-val" style="font-size:0.58rem;color:var(--muted);width:32px;">30s</span></div></div>
+        <div class="vid-default-row"><span class="vid-default-label">theme</span><div style="display:flex;gap:5px;"><button class="color-mode-btn active" id="sc-vid-dark" onclick="setScVidTheme('dark')">dark</button><button class="color-mode-btn" id="sc-vid-light" onclick="setScVidTheme('light')">light</button></div></div>
+        <div class="vid-default-row"><span class="vid-default-label">size</span><div style="display:flex;gap:5px;"><button class="color-mode-btn active" id="sc-vid-sq" onclick="setScVidSize('square')">square</button><button class="color-mode-btn" id="sc-vid-story" onclick="setScVidSize('story')">story</button></div></div>
+        <div class="settings-note">applied as defaults when opening the video tab.</div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">account</div>
+        <button class="disconnect-btn" style="margin:0;" id="settings-disconnect-btn">disconnect strava &amp; clear cache</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="cog-btn" id="cog-btn" title="settings">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+</button>
+
+<!-- MARATHONS VIEW -->
+<div id="view-marathons">
+  <div style="margin-bottom:24px;">
+    <div style="font-family:'Cormorant',serif;font-weight:300;font-style:italic;font-size:2rem;color:var(--accent);margin-bottom:4px;">marathons</div>
+    <div style="font-size:0.6rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;">42.2 km · every finish line</div>
+  </div>
+  <div id="marathon-stats-bar" style="display:flex;gap:24px;margin-bottom:28px;"></div>
+  <div class="marathon-grid" id="marathon-grid"></div>
+</div>
+
+<footer style="flex-shrink:0;text-align:center;padding:10px 24px;border-top:1px solid var(--border);font-size:0.52rem;color:var(--muted);letter-spacing:0.1em;display:flex;align-items:center;justify-content:center;gap:16px;">
+  <span>@screixell</span>
+  <span style="opacity:0.3">·</span>
+  <span>made with ♥ with Claude, from NYC</span>
+</footer>
+</body>
+</html>
